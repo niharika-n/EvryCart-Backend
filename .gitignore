@@ -1,0 +1,6 @@
+/Backend/WebAPIs/.vs/WebAPIs/v15/Server/sqlite3/*.lock
+/Backend/WebAPIs/.vs/WebAPIs/v15/Server/sqlite3/*.ide
+/Backend/WebAPIs/.vs/WebAPIs/v15/Server/sqlite3/*.ide-shm
+/Backend/WebAPIs/.vs/WebAPIs/v15/Server/sqlite3/*.ide-wal
+/Backend/WebAPIs/.vs/WebAPIs/DesignTimeBuild/*.dtbcache
+/Backend/WebAPIs/.vs/config/*.config
