@@ -53,7 +53,7 @@ namespace WebAPIs.Controllers
             }
             IFormFile img = null;
             var file = JsonConvert.DeserializeObject<UserModel>(Request.Form["model"]);
-            var userRoles = JsonConvert.DeserializeObject<int[]>(Request.Form["role"]);
+            var userRoles = JsonConvert.DeserializeObject<RoleTypes[]>(Request.Form["role"]);
             UserModel user = new UserModel();
             var image = Request.Form.Files;
             foreach (var i in image)
@@ -82,29 +82,12 @@ namespace WebAPIs.Controllers
             user.FirstName = file.FirstName;
             user.LastName = file.LastName;
             user.EmailID = file.EmailID;
-            if (file.Password != null)
-            {
-                user.Password = file.Password;
-            }
-            else
-            {
-                user.Password = Guid.NewGuid().ToString().Replace("-", "");
-            }
+            user.Password = file.Password;
             user.ImageContent = imageService.Image(img);
             context.Login.Add(user);
-            await context.SaveChangesAsync();
-
-            var totalRoles = Enum.GetValues(typeof(RoleTypes)).Cast<int>();
-            var selectedRoles = userRoles.Intersect(totalRoles).ToArray();
-            List<RoleTypes> roleList = new List<RoleTypes>();
-            foreach (var role in selectedRoles)
-            {
-                RoleTypes roleVal = (RoleTypes)role;
-                roleList.Add(roleVal);
-            }
-            var roleTypes = roleList.ToArray();
+            await context.SaveChangesAsync();            
             var createdUserId = await context.Login.Where(x => x.EmailID == file.EmailID).Select(x => x.UserID).FirstOrDefaultAsync();
-            var result = AssignUserRole(createdUserId, roleTypes);
+            var result = AssignUserRole(createdUserId, false, userRoles);
             if (result)
             {
                 return Ok(new { success = "user created." });
@@ -115,138 +98,122 @@ namespace WebAPIs.Controllers
             }
         }
 
-        //[Authorize(Policy = "AdminOnly")]
-        //[HttpPost]
-        //[Produces("application/json")]
-        //public async Task<IActionResult> CreateAdminUser()
-        //{
-        //    if (!ModelState.IsValid)
-        //    {
-        //        return BadRequest(ModelState);
-        //    }
-        //    IFormFile img = null;
-        //    var file = JsonConvert.DeserializeObject<UserModel>(Request.Form["model"]);
-        //    UserModel user = new UserModel();
-        //    var image = Request.Form.Files;
-        //    foreach (var i in image)
-        //    {
-        //        img = image[0];
-        //    }
-        //    ImageService imageService = new ImageService();
-        //    var userCheckQuery = context.Login.Where(x => (x.Username == file.Username) || (x.EmailID == file.EmailID));
-        //    if (userCheckQuery.Count() != 0)
-        //    {
-        //        var userCheck = await userCheckQuery.ToArrayAsync();
-        //        foreach (var existingUser in userCheck)
-        //        {
-        //            if (existingUser.Username == file.Username)
-        //            {
-        //                return Ok(new { usernameMessage = "This username exists already" });
-        //            }
-        //            else if (existingUser.EmailID == file.EmailID)
-        //            {
-        //                return Ok(new { emailMessage = "This Email exists already" });
-        //            }
-        //        }
-        //    }
-        //    string tempPassword = Guid.NewGuid().ToString().Replace("-", "");
-        //    user.UserID = file.UserID;
-        //    user.Username = file.Username;
-        //    user.FirstName = file.FirstName;
-        //    user.LastName = file.LastName;
-        //    user.EmailID = file.EmailID;
-        //    user.Password = tempPassword;
-        //    user.ImageContent = imageService.Image(img);
-        //    context.Login.Add(user);
-        //    await context.SaveChangesAsync();
-        //    var createdUserID = await context.Login.Where(x => x.EmailID == file.EmailID).Select(x => x.UserID).FirstOrDefaultAsync();
-        //    var result = AssignUserRole(createdUserID, RoleTypes.Admin, RoleTypes.User);
-        //    if (result)
-        //    {
-        //        string num = Guid.NewGuid().ToString().Replace("-", "");
-        //        PasswordResetModel resetModel = new PasswordResetModel
-        //        {
-        //            Email = user.EmailID,
-        //            OldPassword = user.Password,
-        //            Token = num,
-        //            TokenTimeOut = DateTime.Now.AddHours(2),
-        //            UserID = user.UserID
-        //        };
-
-        //        context.PasswordResetTable.Add(resetModel);
-        //        await context.SaveChangesAsync();
-
-        //        string absolutePath = Path.GetFullPath("Data\\ResetPassword.html");
-        //        var template = await context.ContentTable.Where(x => x.TemplateName == "change_password").FirstOrDefaultAsync();
-        //        if (template == null)
-        //        {
-        //            return NotFound(new { message = "Email template not found." });
-        //        }
-        //        var body = template.Content;
-        //        var url = config["DefaultCorsPolicyName"] + "reset_password/" + num;
-        //        EmailViewModel emailView = new EmailViewModel();
-        //        emailView.Subject = "Reset your password";
-        //        emailView.Body = body.Replace("{ResetUrl}", url).Replace("{UserName}", user.Username);
-        //        emailView.ToEmailList.Add(new MailUser() { Email = user.EmailID, Name = user.Username });
-        //        var mail = emailService.SendEmail(emailView);
-
-        //        if (mail == "OnSuccess")
-        //        {
-        //            return Ok(new { success = "Email sent.", user });
-        //        }
-        //        else
-        //        {
-        //            return Ok(new { fail = "Email could not be sent.", user });
-        //        }
-        //    }
-        //    else
-        //    {
-        //        return Ok(new { fail ="User could not be created."});
-        //    }
-        //}
-
-        private bool AssignUserRole(int userID, params RoleTypes[] roles)
+        [Authorize(Policy = "SuperAdminOnly")]
+        [HttpPost]
+        [Produces("application/json")]
+        public async Task<IActionResult> CreateUserFromAdmin()
         {
-            var userRoles = context.AssignedRolesTable.Where(x => x.UserID == userID).Select(x => x.RoleID).ToArray();
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            IFormFile img = null;
+            var file = JsonConvert.DeserializeObject<UserModel>(Request.Form["model"]);
+            var userRoles = JsonConvert.DeserializeObject<int[]>(Request.Form["role"]);
+            UserModel user = new UserModel();
+            var image = Request.Form.Files;
+            foreach (var i in image)
+            {
+                img = image[0];
+            }
+            ImageService imageService = new ImageService();
+            var userCheckQuery = context.Login.Where(x => (x.Username == file.Username) || (x.EmailID == file.EmailID));
+            if (userCheckQuery.Count() != 0)
+            {
+                var userCheck = await userCheckQuery.ToArrayAsync();
+                foreach (var existingUser in userCheck)
+                {
+                    if (existingUser.Username == file.Username)
+                    {
+                        return Ok(new { usernameMessage = "This username exists already" });
+                    }
+                    else if (existingUser.EmailID == file.EmailID)
+                    {
+                        return Ok(new { emailMessage = "This Email exists already" });
+                    }
+                }
+            }
+            string tempPassword = Guid.NewGuid().ToString().Replace("-", "");
+            user.UserID = file.UserID;
+            user.Username = file.Username;
+            user.FirstName = file.FirstName;
+            user.LastName = file.LastName;
+            user.EmailID = file.EmailID;
+            user.Password = tempPassword;
+            user.ImageContent = imageService.Image(img);
+            context.Login.Add(user);
+            await context.SaveChangesAsync();
+            var totalRoles = Enum.GetValues(typeof(RoleTypes)).Cast<int>();
+            var selectedRoles = userRoles.Intersect(totalRoles).ToArray();
+            List<RoleTypes> roleList = new List<RoleTypes>();
+            foreach (var role in selectedRoles)
+            {
+                RoleTypes roleVal = (RoleTypes)role;
+                roleList.Add(roleVal);
+            }
+            var roleTypes = roleList.ToArray();
+            var createdUserId = await context.Login.Where(x => x.EmailID == file.EmailID).Select(x => x.UserID).FirstOrDefaultAsync();
+            var result = AssignUserRole(createdUserId, true, roleTypes);
+            if (result == true)
+            {
+                return Ok(new { success = "User created." });
+            }
+            else if (result == "Email not sent.")
+            {
+                return Ok(new { emailError = "User created, password Email not sent." });
+            }
+            else
+            {
+                return Ok(new { fail = "User not created." });
+            }
+        }
+
+        private dynamic AssignUserRole(int createdID, bool fromAdmin, params RoleTypes[] roles)
+        {
+            var userRoles = context.AssignedRolesTable.Where(x => x.UserID == createdID).Select(x => x.RoleID).ToArray();
             if (userRoles.Count() == 0)
             {
                 foreach (var role in roles)
                 {
                     AssignedRolesModel assignedRoles = new AssignedRolesModel();
                     assignedRoles.RoleID = (int)role;
-                    assignedRoles.UserID = userID;
+                    assignedRoles.UserID = createdID;
                     context.AssignedRolesTable.Add(assignedRoles);
                     context.SaveChangesAsync();
-                    var assignedNewRole = context.AssignedRolesTable.Where(x => x.UserID == userID).Select(x => x.RoleID).ToArray();
-                    if (assignedNewRole.Count() == 1)
-                    {
-                        SendMail(assignedRoles.UserID);
-                    }
                 }
-                return true;
-            }
-            else
-            {
-                foreach (var role in roles)
+                if (!fromAdmin)
                 {
-                    if (!userRoles.Contains((int)role))
+                    return true;
+                }
+                else
+                {
+                    var assignedNewRole = context.AssignedRolesTable.Where(x => x.UserID == createdID).Select(x => x.RoleID).ToArray();
+                    if (assignedNewRole.Contains((int)RoleTypes.Admin) && assignedNewRole.Count() == 1)
                     {
                         AssignedRolesModel assignedRoles = new AssignedRolesModel();
-                        assignedRoles.RoleID = (int)role;
-                        assignedRoles.UserID = userID;
+                        assignedRoles.RoleID = (int)RoleTypes.User;
+                        assignedRoles.UserID = createdID;
                         context.AssignedRolesTable.Add(assignedRoles);
                         context.SaveChangesAsync();
                     }
+                    var result = SendMail(createdID);
+                    if (result)
+                    {
+                        return true;
+                    }
                     else
                     {
-                        return false;
+                        return "Email not sent.";
                     }
                 }
             }
-            return false;
+            else
+            {
+                return false;
+            }
         }
 
-        private string SendMail(int userID)
+        private bool SendMail(int userID)
         {
             var user = context.Login.Where(x => x.UserID == userID).FirstOrDefault();
             string num = Guid.NewGuid().ToString().Replace("-", "");
@@ -266,7 +233,7 @@ namespace WebAPIs.Controllers
             var template = context.ContentTable.Where(x => x.TemplateName == "change_password").FirstOrDefault();
             if (template == null)
             {
-                return "Template does not exist";
+                return false;
             }
             var body = template.Content;
             var url = config["DefaultCorsPolicyName"] + "reset_password/" + num;
@@ -277,11 +244,11 @@ namespace WebAPIs.Controllers
             var mail = emailService.SendEmail(emailView);
             if (mail == "OnSuccess")
             {
-                return "Email sent.";
+                return true;
             }
             else
             {
-                return "Email could not be sent.";
+                return false;
             }
         }
 
