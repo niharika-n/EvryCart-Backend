@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading.Tasks;
@@ -30,354 +31,504 @@ namespace WebAPIs.Controllers
 
         [Authorize(Policy = "AdminOnly")]
         [HttpGet("{id}")]
-        public async Task<IActionResult> Detail(int? id)
+        public async Task<IResult> Detail(int? id)
         {
-            if (id != 0)
+            Result result = new Result();
+            try
             {
-                var detail = await context.Categories.Where(x => x.CategoryID == id && x.IsDeleted != true).FirstOrDefaultAsync();
-                var image = context.Images.Where(x => x.ImageID == detail.ImageID).FirstOrDefault();
-                if (detail != null)
+                if (id != 0)
                 {
-                    if (image != null)
+                    var detail = await context.Categories.Where(x => x.CategoryID == id && x.IsDeleted != true).FirstOrDefaultAsync();
+                    if (detail != null)
                     {
-                        detail.ImageContent = image.ImageContent;
+                        var image = context.Images.Where(x => x.ImageID == detail.ImageID).FirstOrDefault();
+                        if (image != null)
+                        {
+                            detail.ImageContent = image.ImageContent;
+                        }
+                        result.Status = true;
+                        result.Body = detail;
+
+                        return result;
                     }
-                    return Ok(detail);
+                    else
+                    {
+                        result.Message = "Category does not exist.";
+                        return result;
+                    }
                 }
-                else
-                {
-                    return NotFound("Category does not exist.");
-                }
+                result.Message = "Category ID is not correct.";
+
+                return result;
             }
-            return Ok();
+            catch (Exception e)
+            {
+                result.Body = e;
+                result.StatusCode = HttpStatusCode.InternalServerError;
+
+                return result;
+            }
         }
+
 
         [Authorize(Policy = "AdminOnly")]
         [HttpPost]
-        public async Task<IActionResult> InsertCategory()
+        public async Task<IResult> InsertCategory()
         {
-            if (!ModelState.IsValid)
+            Result result = new Result();
+            try
             {
-                return BadRequest(ModelState);
-            }
-            var categoryFile = JsonConvert.DeserializeObject<CategoryModel>(Request.Form["category"]);
-            CategoryModel category = new CategoryModel();
-            Images images = new Images();
-            if (Request.Form.Files.Count != 0)
-            {
-                IFormFile img = null;
-                var image = Request.Form.Files;
-                foreach (var i in image)
+                if (!ModelState.IsValid)
                 {
-                    img = image[0];
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    return result;
                 }
-                ImageService imageService = new ImageService();
-                images.ImageName = img.FileName;
-                images.ImageContent = imageService.Image(img);
-                images.ImageExtenstion = Path.GetExtension(img.FileName);
-                context.Images.Add(images);
-                await context.SaveChangesAsync();
-                category.ImageID = images.ImageID;
-                category.ImageContent = images.ImageContent;
-            }
-            var categoryCheck = context.Categories.Where(x => x.CategoryName == categoryFile.CategoryName).ToList();
-            if (categoryCheck.Count() != 0)
-            {
-                return Ok(new { message = "This category already exists" });
-            }
-            category.CategoryID = categoryFile.CategoryID;
-            category.CategoryName = categoryFile.CategoryName;
-            category.CategoryDescription = categoryFile.CategoryDescription;
-            category.IsActive = categoryFile.IsActive;
-            category.CreatedBy = helper.GetSpecificClaim("ID");
-            category.CreatedDate = DateTime.Now;
-            category.ParentCategory = categoryFile.ParentCategory;
-            if (!category.ParentCategory)
-            {
-                category.ChildCategory = categoryFile.ChildCategory;
-            }
-
-            context.Categories.Add(category);
-            var status = await context.SaveChangesAsync();
-            CategoryViewModel viewModel = new CategoryViewModel()
-            {
-                CreatedUser = helper.GetSpecificClaim("Name")
-            };
-            return Ok(new { categoryObj = category });
-        }
-
-        [Authorize(Policy = "AdminOnly")]
-        [HttpPut]
-        public async Task<IActionResult> UpdateCategory()
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-            Images images = new Images();
-            var file = JsonConvert.DeserializeObject<CategoryModel>(Request.Form["category"]);
-            var categoryCheck = context.Categories.Where(x => x.CategoryName == file.CategoryName && x.CategoryID != file.CategoryID && x.IsDeleted != true).Any();
-            if (categoryCheck)
-            {
-                return Ok(new { message = "This category already exists" });
-            }
-            var category = context.Categories.Where(x => x.CategoryID == file.CategoryID && x.IsDeleted != true).FirstOrDefault();
-            category.CategoryID = file.CategoryID;
-            category.CategoryName = file.CategoryName;
-            category.CategoryDescription = file.CategoryDescription;
-            category.IsActive = file.IsActive;
-            category.ModifiedBy = helper.GetSpecificClaim("ID");
-            category.ModifiedDate = DateTime.Now;
-            category.ParentCategory = file.ParentCategory;
-            if (file.ImageID == null)
-            {
-                if (category.ImageID != null)
+                var categoryFile = JsonConvert.DeserializeObject<CategoryModel>(Request.Form["category"]);
+                CategoryModel category = new CategoryModel();
+                Images images = new Images();
+                if (Request.Form.Files.Count != 0)
                 {
-                    var oldImage = await context.Images.Where(x => x.ImageID == category.ImageID).FirstOrDefaultAsync();
-                    context.Images.Remove(oldImage);
-                    await context.SaveChangesAsync();
-                    category.ImageID = null;
-                }
-            }
-            if (!category.ParentCategory)
-            {
-                category.ChildCategory = file.ChildCategory;
-            }
-            else
-            {
-                category.ChildCategory = null;
-            }
-            if (Request.Form.Files.Count != 0)
-            {
-                ImageService imageService = new ImageService();
-                IFormFile img = null;
-                if (category == null)
-                {
-                    return Ok(new { message = "Category does not exist." });
-                }
-                var image = Request.Form.Files;
-                img = image[0];
-                images.ImageName = img.FileName;
-                images.ImageContent = imageService.Image(img);
-                images.ImageExtenstion = Path.GetExtension(img.FileName);
-                if (category.ImageID == null)
-                {
+                    IFormFile img = null;
+                    var image = Request.Form.Files;
+                    foreach (var i in image)
+                    {
+                        img = image[0];
+                    }
+                    ImageService imageService = new ImageService();
+                    images.ImageName = img.FileName;
+                    images.ImageContent = imageService.Image(img);
+                    images.ImageExtenstion = Path.GetExtension(img.FileName);
                     context.Images.Add(images);
                     await context.SaveChangesAsync();
                     category.ImageID = images.ImageID;
                     category.ImageContent = images.ImageContent;
                 }
-                var categoryImage = await context.Images.Where(x => x.ImageID == category.ImageID).FirstOrDefaultAsync();
-                categoryImage.ImageContent = images.ImageContent;
-                categoryImage.ImageExtenstion = images.ImageExtenstion;
-                categoryImage.ImageName = images.ImageName;
+                var categoryCheck = context.Categories.Where(x => x.CategoryName == categoryFile.CategoryName).ToList();
+                if (categoryCheck.Count() != 0)
+                {
+                    result.Message = "This category already exists.";
+                    return result;
+                }
+                category.CategoryID = categoryFile.CategoryID;
+                category.CategoryName = categoryFile.CategoryName;
+                category.CategoryDescription = categoryFile.CategoryDescription;
+                category.IsActive = categoryFile.IsActive;
+                category.CreatedBy = helper.GetSpecificClaim("ID");
+                category.CreatedDate = DateTime.Now;
+                category.ParentCategory = categoryFile.ParentCategory;
+                if (!category.ParentCategory)
+                {
+                    category.ChildCategory = categoryFile.ChildCategory;
+                }
+
+                context.Categories.Add(category);
+                var status = await context.SaveChangesAsync();
+                CategoryViewModel viewModel = new CategoryViewModel()
+                {
+                    CreatedUser = helper.GetSpecificClaim("Name")
+                };
+                result.Status = true;
+                result.Body = new { categoryObj = category };
+                return result;
             }
-            var status = await context.SaveChangesAsync();
-            CategoryViewModel localmodel = new CategoryViewModel()
+            catch (Exception e)
             {
-                ModifiedUser = helper.GetSpecificClaim("Name")
-            };
-            return Ok(new { categoryObj = category });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
+            }
         }
 
+
         [Authorize(Policy = "AdminOnly")]
-        [HttpGet]
-        public async Task<IActionResult> Listing(DataHelperModel dataHelper, bool getAllParent, bool getAll)
+        [HttpPut]
+        public async Task<IResult> UpdateCategory()
         {
-            var listQuery = from category in context.Categories
-                            join createdUser in context.Login
-                            on category.CreatedBy equals createdUser.UserID
-                            into createdUserName
-                            from createdUser in createdUserName.DefaultIfEmpty()
-                            let createdByUser = createdUser.Username
-                            join modifiedUser in context.Login
-                            on category.ModifiedBy equals modifiedUser.UserID
-                            into modifiedUserName
-                            from modifiedUser in modifiedUserName.DefaultIfEmpty()
-                            let modifiedByUser = modifiedUser.Username
-                            join products in context.Products
-                            on category.CategoryID equals products.CategoryID
-                            into productCount
-                            from productValueCount in productCount.DefaultIfEmpty()
-                            where category.IsDeleted != true
-                            orderby category.CreatedDate descending
-                            group new { category, productValueCount, createdByUser, modifiedByUser } by
-                            new { category, createdByUser, modifiedByUser } into categories                           
-                            select new CategoryViewModel
-                            {
-                                Name = categories.Key.category.CategoryName,
-                                CreatedBy = categories.Key.category.CreatedBy,
-                                ID = categories.Key.category.CategoryID,
-                                IsActive = categories.Key.category.IsActive,
-                                CreatedDate = categories.Key.category.CreatedDate,
-                                Description = categories.Key.category.CategoryDescription,
-                                ModifiedBy = categories.Key.category.ModifiedBy,
-                                ModifiedDate = categories.Key.category.ModifiedDate,
-                                CreatedUser = categories.Key.createdByUser,
-                                ModifiedUser = categories.Key.modifiedByUser,
-                                Parent = categories.Key.category.ParentCategory,
-                                Child = categories.Key.category.ChildCategory,
-                                ImageContent = "",
-                                AssociatedProducts = categories.Where(x => x.productValueCount != null ? x.category.CategoryID == x.category.CategoryID: false).Count()                                
-                            };
-            if (getAllParent == false)
+            Result result = new Result();
+            try
             {
-                if (dataHelper.Search != null)
+                if (!ModelState.IsValid)
                 {
-                    listQuery = listQuery.Where(x => x.Name.Contains(dataHelper.Search) || x.Description.Contains(dataHelper.Search));
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    return result;
                 }
-                var list = listQuery;
-                list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
-                var resultCount = list.Count();
-                var pagedList = DataCount.Page(list, dataHelper.PageNumber, dataHelper.PageSize);
-                var resultList = await pagedList.ToListAsync();
-                ResultModel result = new ResultModel();
-                result.CategoryResult = resultList;
-                result.TotalCount = resultCount;
-                if (resultList.Count == 0)
+                Images images = new Images();
+                var file = JsonConvert.DeserializeObject<CategoryModel>(Request.Form["category"]);
+                var categoryCheck = context.Categories.Where(x => x.CategoryName == file.CategoryName && x.CategoryID != file.CategoryID && x.IsDeleted != true).Any();
+                if (categoryCheck)
                 {
-                    return NotFound("No records present.");
+                    result.Message = "This category already exists.";
+                    return result;
                 }
-                return Ok(result);
-            }
-            else
-            {
-                if (!getAll)
+                var category = context.Categories.Where(x => x.CategoryID == file.CategoryID && x.IsDeleted != true).FirstOrDefault();
+                category.CategoryID = file.CategoryID;
+                category.CategoryName = file.CategoryName;
+                category.CategoryDescription = file.CategoryDescription;
+                category.IsActive = file.IsActive;
+                category.ModifiedBy = helper.GetSpecificClaim("ID");
+                category.ModifiedDate = DateTime.Now;
+                category.ParentCategory = file.ParentCategory;
+                if (file.ImageID == null)
                 {
-                    listQuery = listQuery.Where(x => x.Child == null).OrderBy(x => x.Name);
-                    var categoryList = await listQuery.ToListAsync();
-                    return Ok(categoryList);
+                    if (category.ImageID != null)
+                    {
+                        var oldImage = await context.Images.Where(x => x.ImageID == category.ImageID).FirstOrDefaultAsync();
+                        context.Images.Remove(oldImage);
+                        await context.SaveChangesAsync();
+                        category.ImageID = null;
+                    }
+                }
+                if (!category.ParentCategory)
+                {
+                    category.ChildCategory = file.ChildCategory;
                 }
                 else
                 {
-                    listQuery = listQuery.OrderBy(x => x.Name);
-                    var categoryList = await listQuery.ToListAsync();
-                    return Ok(categoryList);
+                    category.ChildCategory = null;
                 }
+                if (Request.Form.Files.Count != 0)
+                {
+                    ImageService imageService = new ImageService();
+                    IFormFile img = null;
+                    if (category == null)
+                    {
+                        result.Message = "Category does not exist.";
+                        return result;
+                    }
+                    var image = Request.Form.Files;
+                    img = image[0];
+                    images.ImageName = img.FileName;
+                    images.ImageContent = imageService.Image(img);
+                    images.ImageExtenstion = Path.GetExtension(img.FileName);
+                    if (category.ImageID == null)
+                    {
+                        context.Images.Add(images);
+                        await context.SaveChangesAsync();
+                        category.ImageID = images.ImageID;
+                        category.ImageContent = images.ImageContent;
+                    }
+                    var categoryImage = await context.Images.Where(x => x.ImageID == category.ImageID).FirstOrDefaultAsync();
+                    categoryImage.ImageContent = images.ImageContent;
+                    categoryImage.ImageExtenstion = images.ImageExtenstion;
+                    categoryImage.ImageName = images.ImageName;
+                }
+                var status = await context.SaveChangesAsync();
+                CategoryViewModel localmodel = new CategoryViewModel()
+                {
+                    ModifiedUser = helper.GetSpecificClaim("Name")
+                };
+                result.Status = true;
+                result.Body = new { categoryObj = category };
+                return result;
+            }
+            catch (Exception e)
+            {
+                result.Body = e;
+                result.StatusCode = HttpStatusCode.InternalServerError;
+
+                return result;
             }
         }
+
+
+        [Authorize(Policy = "AdminOnly")]
+        [HttpGet]
+        public async Task<IResult> Listing(DataHelperModel dataHelper, bool getAllParent, bool getAll)
+        {
+            Result result = new Result();
+            try
+            {
+                var listQuery = from category in context.Categories
+                                join createdUser in context.Login
+                                on category.CreatedBy equals createdUser.UserID
+                                into createdUserName
+                                from createdUser in createdUserName.DefaultIfEmpty()
+                                let createdByUser = createdUser.Username
+                                join modifiedUser in context.Login
+                                on category.ModifiedBy equals modifiedUser.UserID
+                                into modifiedUserName
+                                from modifiedUser in modifiedUserName.DefaultIfEmpty()
+                                let modifiedByUser = modifiedUser.Username
+                                join products in context.Products
+                                on category.CategoryID equals products.CategoryID
+                                into productCount
+                                from productValueCount in productCount.DefaultIfEmpty()
+                                where category.IsDeleted != true
+                                orderby category.CreatedDate descending
+                                group new { category, productValueCount, createdByUser, modifiedByUser } by
+                                new { category, createdByUser, modifiedByUser } into categories
+                                select new CategoryViewModel
+                                {
+                                    Name = categories.Key.category.CategoryName,
+                                    CreatedBy = categories.Key.category.CreatedBy,
+                                    ID = categories.Key.category.CategoryID,
+                                    IsActive = categories.Key.category.IsActive,
+                                    CreatedDate = categories.Key.category.CreatedDate,
+                                    Description = categories.Key.category.CategoryDescription,
+                                    ModifiedBy = categories.Key.category.ModifiedBy,
+                                    ModifiedDate = categories.Key.category.ModifiedDate,
+                                    CreatedUser = categories.Key.createdByUser,
+                                    ModifiedUser = categories.Key.modifiedByUser,
+                                    Parent = categories.Key.category.ParentCategory,
+                                    Child = categories.Key.category.ChildCategory,
+                                    ImageContent = "",
+                                    AssociatedProducts = categories.Where(x => x.productValueCount != null ? x.category.CategoryID == x.category.CategoryID : false).Count()
+                                };
+                if (getAllParent != true)
+                {
+                    if (dataHelper.Search != null)
+                    {
+                        listQuery = listQuery.Where(x => x.Name.Contains(dataHelper.Search) || x.Description.Contains(dataHelper.Search));
+                    }
+                    var list = listQuery;
+                    list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
+                    var resultCount = list.Count();
+                    var pagedList = DataCount.Page(list, dataHelper.PageNumber, dataHelper.PageSize);
+                    var resultList = await pagedList.ToListAsync();
+                    ResultModel resultModel = new ResultModel();
+                    resultModel.CategoryResult = resultList;
+                    resultModel.TotalCount = resultCount;
+                    if (resultList.Count == 0)
+                    {
+                        result.Message = "No records present.";
+                        return result;
+                    }
+                    result.Status = true;
+                    result.Body = resultModel;
+                    return result;
+                }
+                else
+                {
+                    if (!getAll)
+                    {
+                        listQuery = listQuery.Where(x => x.Child == null).OrderBy(x => x.Name);
+                        var categoryList = await listQuery.ToListAsync();
+                        result.Body = categoryList;
+                        result.Status = true;
+                        return result;
+                    }
+                    else
+                    {
+                        listQuery = listQuery.OrderBy(x => x.Name);
+                        var categoryList = await listQuery.ToListAsync();
+                        result.Body = categoryList;
+                        result.Status = true;
+                        return result;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+                return result;
+            }
+        }
+
 
         [Authorize(Policy = "AdminOnly")]
         [HttpDelete]
-        public async Task<IActionResult> Delete(int Id)
+        public async Task<IResult> Delete(int Id)
         {
-            var category = await context.Categories.Where(x => x.CategoryID == Id && x.IsDeleted != true).FirstOrDefaultAsync();
-            if (category == null)
+            Result result = new Result();
+            try
             {
-                return NotFound("Category does not exist.");
-            }
-            category.IsDeleted = true;
-            var deletedCategory = await context.SaveChangesAsync();
-            if (deletedCategory > 0)
-            {
-                var products = await context.Products.Where(x => x.CategoryID == Id && x.IsDeleted != true).ToListAsync();
-                foreach (var pdt in products)
+                var category = await context.Categories.Where(x => x.CategoryID == Id && x.IsDeleted != true).FirstOrDefaultAsync();
+                if (category == null)
                 {
-                    pdt.IsDeleted = true;
-                    var result = await context.SaveChangesAsync();
-                    if (result > 0)
+                    result.Message = "Category does not exist.";
+                    return result;
+                }
+                category.IsDeleted = true;
+                var deletedCategory = await context.SaveChangesAsync();
+                if (deletedCategory > 0)
+                {
+                    var products = await context.Products.Where(x => x.CategoryID == Id && x.IsDeleted != true).ToListAsync();
+                    foreach (var pdt in products)
                     {
-                        var productImages = await context.ProductImage.Where(x => x.ProductID == pdt.ProductID).ToListAsync();
-                        if (productImages != null)
+                        pdt.IsDeleted = true;
+                        var deleteCheck = await context.SaveChangesAsync();
+                        if (deleteCheck > 0)
                         {
-                            context.ProductImage.RemoveRange(productImages);
+                            var productImages = await context.ProductImage.Where(x => x.ProductID == pdt.ProductID).ToListAsync();
+                            if (productImages != null)
+                            {
+                                context.ProductImage.RemoveRange(productImages);
+                            }
+                            var productAttributeValues = await context.ProductAttributeValues.Where(x => x.ProductID == pdt.ProductID).ToListAsync();
+                            if (productAttributeValues != null)
+                            {
+                                context.ProductAttributeValues.RemoveRange(productAttributeValues);
+                            }
+                            await context.SaveChangesAsync();
                         }
-                        var productAttributeValues = await context.ProductAttributeValues.Where(x => x.ProductID == pdt.ProductID).ToListAsync();
-                        if (productAttributeValues != null)
-                        {
-                            context.ProductAttributeValues.RemoveRange(productAttributeValues);
-                        }
-                        await context.SaveChangesAsync();
                     }
-                }                
+                }
+                result.Message = "Deleted successfully.";
+                result.Status = true;
+
+                return result;
             }
-            return Ok("Deleted successfully.");
-        } 
+            catch (Exception e)
+            {
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
+            }
+        }
+
 
         [Authorize(Policy = "AdminOnly")]
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetAssociatedProducts(int id, DataHelperModel dataHelper)
+        public async Task<IResult> GetAssociatedProducts(int id, DataHelperModel dataHelper)
         {
-            if (id != 0)
+            Result result = new Result();
+            try
             {
-                var product = from products in context.Products
-                              where products.CategoryID == id
-&& products.IsDeleted != true
-                              orderby products.ProductName
-                              select new ProductViewModel { ProductName = products.ProductName, ProductID = products.ProductID, ShortDescription = products.ShortDescription, CategoryID = products.CategoryID, CategoryName = "", IsActive = products.IsActive, CreatedBy = products.CreatedBy, CreatedDate = products.CreatedDate, CreatedUser = "", Price = products.Price, QuantityInStock = products.QuantityInStock, VisibleEndDate = products.VisibleEndDate, AllowCustomerReviews = products.AllowCustomerReviews, DiscountPercent = products.DiscountPercent, VisibleStartDate = products.VisibleStartDate, IsDiscounted = products.IsDiscounted, LongDescription = products.LongDescription, MarkNew = products.MarkNew, ModelNumber = products.ModelNumber, ModifiedBy = products.ModifiedBy, ModifiedDate = products.ModifiedDate, ModifiedUser = "", OnHomePage = products.OnHomePage, ShipingEnabled = products.ShipingEnabled, ShippingCharges = products.ShippingCharges, Tax = products.Tax, TaxExempted = products.TaxExempted, QuantityType = products.QuantityType };
-                if (product.Count() == 0)
+                if (id != 0)
                 {
-                    return NotFound("Products do not exist for the category.");
+                    var product = from products in context.Products
+                                  where products.CategoryID == id
+                                  && products.IsDeleted != true
+                                  orderby products.ProductName
+                                  select new ProductViewModel { ProductName = products.ProductName, ProductID = products.ProductID, ShortDescription = products.ShortDescription, CategoryID = products.CategoryID, CategoryName = "", IsActive = products.IsActive, CreatedBy = products.CreatedBy, CreatedDate = products.CreatedDate, CreatedUser = "", Price = products.Price, QuantityInStock = products.QuantityInStock, VisibleEndDate = products.VisibleEndDate, AllowCustomerReviews = products.AllowCustomerReviews, DiscountPercent = products.DiscountPercent, VisibleStartDate = products.VisibleStartDate, IsDiscounted = products.IsDiscounted, LongDescription = products.LongDescription, MarkNew = products.MarkNew, ModelNumber = products.ModelNumber, ModifiedBy = products.ModifiedBy, ModifiedDate = products.ModifiedDate, ModifiedUser = "", OnHomePage = products.OnHomePage, ShipingEnabled = products.ShipingEnabled, ShippingCharges = products.ShippingCharges, Tax = products.Tax, TaxExempted = products.TaxExempted, QuantityType = products.QuantityType };
+                    if (product.Count() == 0)
+                    {
+                        result.Message = "Products do not exist for the category.";
+                        return result;
+                    }
+                    var list = product;
+                    list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
+                    var resultCount = list.Count();
+                    var pagedList = DataCount.Page(list, dataHelper.PageNumber, dataHelper.PageSize);
+                    var resultList = await pagedList.ToListAsync();
+                    ResultModel resultModel = new ResultModel();
+                    resultModel.ProductResult = resultList;
+                    resultModel.TotalCount = resultCount;
+                    if (resultList.Count == 0)
+                    {
+                        result.Message = "No records present.";
+                        return result;
+                    }
+                    result.Status = true;
+                    result.Body = resultModel;
+
+                    return result;
                 }
-                var list = product;
-                list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
-                var resultCount = list.Count();
-                var pagedList = DataCount.Page(list, dataHelper.PageNumber, dataHelper.PageSize);
-                var resultList = await pagedList.ToListAsync();
-                ResultModel result = new ResultModel();
-                result.ProductResult = resultList;
-                result.TotalCount = resultCount;
-                if (resultList.Count == 0)
-                {
-                    return NotFound("No records present.");
-                }
-                return Ok(result);
+                result.Message = "ID entered is null.";
+                return result;
             }
-            return Ok("ID entered is null.");
+            catch (Exception e)
+            {
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
+            }
         }
+
 
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> GetCategoriesForCustomer()
+        public async Task<IResult> GetCategoriesForCustomer()
         {
-            var categories = from category in context.Categories
-                             where category.IsDeleted != true && category.ParentCategory == true && category.IsActive == true
-                             orderby category.CreatedDate
-                             select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
-            var categoryList = await categories.ToListAsync();
-            if (categoryList.Count == 0)
+            Result result = new Result();
+            try
             {
-                return NotFound("Categories do not exist.");
+                var categories = from category in context.Categories
+                                 where category.IsDeleted != true && category.ParentCategory == true && category.IsActive == true
+                                 orderby category.CreatedDate
+                                 select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
+                var categoryList = await categories.ToListAsync();
+                if (categoryList.Count == 0)
+                {
+                    result.Message = "Categories do not exist.";
+                    return result;
+                }
+                ResultModel resultModel = new ResultModel();
+                resultModel.CategoryResult = categoryList;
+
+                result.Status = true;
+                result.Body = resultModel;
+
+                return result;
             }
-            ResultModel result = new ResultModel();
-            result.CategoryResult = categoryList;
-            return Ok(result);
+            catch (Exception e)
+            {
+                result.Body = e;
+                result.StatusCode = HttpStatusCode.BadRequest;
+
+                return result;
+            }
         }
+
 
         [AllowAnonymous]
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetChildCategoriesForCustomer(int id)
+        public async Task<IResult> GetChildCategoriesForCustomer(int id)
         {
-            var childCategory = from category in context.Categories
-                                where category.ChildCategory == id && category.IsDeleted != true
-                                select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
-
-            await childCategory.ToListAsync();
-            if (childCategory.Count() == 0)
+            Result result = new Result();
+            try
             {
-                return NoContent();
+                var childCategory = from category in context.Categories
+                                    where category.ChildCategory == id && category.IsDeleted != true
+                                    select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
+
+                await childCategory.ToListAsync();
+                if (childCategory.Count() == 0)
+                {
+                    result.Message = "Categories do not exist.";
+                    return result;
+                }
+                result.Status = true;
+                result.Body = childCategory;
+
+                return result;
             }
-            return Ok(childCategory);
+            catch (Exception e)
+            {
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
+            }
         }
+
 
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> GetLatestCategoriesForCustomer()
+        public async Task<IResult> GetLatestCategoriesForCustomer()
         {
-            var categories = from category in context.Categories
-                             join image in context.Images
-                             on category.ImageID equals image.ImageID
-                             into categoryDetail
-                             from image in categoryDetail.DefaultIfEmpty()
-                             orderby category.CreatedDate descending
-                             where category.IsActive == true && category.IsDeleted != true && category.ParentCategory == true
-                             select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = image.ImageContent, AssociatedProducts = 0 };
-            var categoryList = await categories.Take(3).ToListAsync();
-            if (categoryList.Count == 0)
+            Result result = new Result();
+            try
             {
-                return NotFound("Categories does not exist");
+                var categories = from category in context.Categories
+                                 join image in context.Images
+                                 on category.ImageID equals image.ImageID
+                                 into categoryDetail
+                                 from image in categoryDetail.DefaultIfEmpty()
+                                 orderby category.CreatedDate descending
+                                 where category.IsActive == true && category.IsDeleted != true && category.ParentCategory == true
+                                 select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = image.ImageContent, AssociatedProducts = 0 };
+                var categoryList = await categories.Take(3).ToListAsync();
+                if (categoryList.Count == 0)
+                {
+                    result.Message = "Categories does not exist";
+                    return result;
+                }
+                result.Body = categoryList;
+                result.Status = true;
+                return result;
             }
-            return Ok(categoryList);
+            catch (Exception e)
+            {
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
+            }
         }
     }
 }
