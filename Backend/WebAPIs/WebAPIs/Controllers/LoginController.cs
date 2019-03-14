@@ -11,6 +11,7 @@ using WebAPIs.Data;
 using WebAPIs.Models;
 using System.Linq;
 using System;
+using System.Net;
 
 namespace WebAPIs.Controllers
 {
@@ -40,37 +41,54 @@ namespace WebAPIs.Controllers
         /// </returns>
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> LoginUser([FromQuery] LoginModel loginModel)
+        public async Task<IResult> LoginUser([FromQuery] LoginModel loginModel)
         {
-            IActionResult response = Unauthorized();
-
-            if (loginModel.Username != null && loginModel.Password != null)
+            Result result = new Result();
+            try
             {
-                if (!ModelState.IsValid)
+                IActionResult response = Unauthorized();
+                if (loginModel.Username != null && loginModel.Password != null)
                 {
-                    return response = BadRequest(ModelState);
+                    if (!ModelState.IsValid)
+                    {
+                        result.StatusCode = HttpStatusCode.BadRequest;
+                        return result;
+                    }
+
+                    var userDetail = from login in context.Login
+                                     where (login.Username == loginModel.Username
+                                     && login.Password == loginModel.Password) || (login.EmailID == loginModel.Username && login.Password == loginModel.Password)
+                                     select new UserViewModel { UserID = login.UserID, Username = login.Username, EmailID = login.EmailID, FirstName = login.FirstName, ImageContent = login.ImageContent, LastName = login.LastName, RoleID = null };
+                    if (userDetail.Count() == 0)
+                    {
+                        result.Body = new { message = "Username or Password is incorrect" };
+                        return result;
+                    }
+                    var user = await userDetail.FirstOrDefaultAsync();
+                    var userRoles = await context.AssignedRolesTable.Where(x => x.UserID == user.UserID).Select(x => x.RoleID).ToArrayAsync();
+                    user.RoleID = userRoles;
+                    var tokenString = BuildToken(user);
+                    response = Ok(new { token = tokenString, user });
+
+                    result.Status = true;
+                    result.Body = response;
+                    return result;
                 }
-
-                var userDetail = from login in context.Login
-                                 where (login.Username == loginModel.Username
-                                 && login.Password == loginModel.Password) || (login.EmailID == loginModel.Username && login.Password == loginModel.Password)
-                                 select new UserViewModel { UserID = login.UserID, Username = login.Username, EmailID = login.EmailID, FirstName = login.FirstName, ImageContent = login.ImageContent, LastName = login.LastName, RoleID = null };
-                if (userDetail.Count() == 0)
+                else
                 {
-                    return response = Ok(new { message = "Username or Password is incorrect" });
-                }                
-                var user = await userDetail.FirstOrDefaultAsync();
-                var userRoles = await context.AssignedRolesTable.Where(x => x.UserID == user.UserID).Select(x => x.RoleID).ToArrayAsync();                
-                user.RoleID = userRoles;
-                var tokenString = BuildToken(user);
-                response = Ok(new { token = tokenString, user });
-                return Ok(response);
+                    result.Body = new { message = "Enter username and password" };
+                    return result;
+                }
             }
-            else
+            catch (Exception e)
             {
-                return response = Ok(new { message = "Enter username and password" });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
             }
         }
+
 
         /// <summary>
         /// Generates the token.
@@ -98,97 +116,144 @@ namespace WebAPIs.Controllers
               signingCredentials: creds);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
-        }       
+        }
+
 
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> ForgotPassword(string Username)
+        public async Task<IResult> ForgotPassword(string Username)
         {
-            var User = from userDetail in context.Login
-                       where (userDetail.Username == Username) || (userDetail.EmailID == Username)
-                       select userDetail;
-            var userObj = await User.SingleOrDefaultAsync();
-            if (userObj != null)
+            Result result = new Result();
+            try
             {
-                string num = Guid.NewGuid().ToString().Replace("-", "");
-                PasswordResetModel resetModel = new PasswordResetModel
+                var User = from userDetail in context.Login
+                           where (userDetail.Username == Username) || (userDetail.EmailID == Username)
+                           select userDetail;
+                var userObj = await User.SingleOrDefaultAsync();
+                if (userObj != null)
                 {
-                    Email = userObj.EmailID,
-                    OldPassword = userObj.Password,
-                    Token = num,
-                    TokenTimeOut = DateTime.Now.AddHours(2),
-                    UserID = userObj.UserID
-                };
+                    string num = Guid.NewGuid().ToString().Replace("-", "");
+                    PasswordResetModel resetModel = new PasswordResetModel
+                    {
+                        Email = userObj.EmailID,
+                        OldPassword = userObj.Password,
+                        Token = num,
+                        TokenTimeOut = DateTime.Now.AddHours(2),
+                        UserID = userObj.UserID
+                    };
 
-                context.PasswordResetTable.Add(resetModel);
-                await context.SaveChangesAsync();
-                
-                var template =  await context.ContentTable.Where(x => x.TemplateName == "change_password").FirstOrDefaultAsync();
-                if ( template == null)
-                {
-                    return NotFound(new { message = "Email Template not found." });
-                }
-                var body = template.Content;
+                    context.PasswordResetTable.Add(resetModel);
+                    await context.SaveChangesAsync();
 
-                var url = config["DefaultCorsPolicyName"] + "reset_password/" + num;
-                EmailViewModel emailView = new EmailViewModel();                  
-                emailView.Subject = "Reset your password";
-                emailView.Body = body.Replace("{ResetUrl}", url).Replace("{UserName}", userObj.Username);
-                emailView.ToEmailList.Add(new MailUser() { Email = userObj.EmailID, Name = userObj.Username });
-                var mail = emailService.SendEmail(emailView);
+                    var template = await context.ContentTable.Where(x => x.TemplateName == "change_password").FirstOrDefaultAsync();
+                    if (template == null)
+                    {
+                        result.Message = "Email Template not found.";
+                        return result;
+                    }
+                    var body = template.Content;
 
-                if (mail == "OnSuccess")
-                {
-                    return Ok(new { success = "Email sent." });
+                    var url = config["DefaultCorsPolicyName"] + "reset_password/" + num;
+                    EmailViewModel emailView = new EmailViewModel();
+                    emailView.Subject = "Reset your password";
+                    emailView.Body = body.Replace("{ResetUrl}", url).Replace("{UserName}", userObj.Username);
+                    emailView.ToEmailList.Add(new MailUser() { Email = userObj.EmailID, Name = userObj.Username });
+                    var mail = emailService.SendEmail(emailView);
+
+                    if (mail == "OnSuccess")
+                    {
+                        result.Status = true;
+                        result.Body = new { success = "Email sent." };
+                        return result;
+                    }
+                    else
+                    {
+                        result.Body = new { fail = "Email cound not be sent." };
+                        return result;
+                    }
                 }
                 else
                 {
-                    return BadRequest(new { fail = "Email cound not be sent." });
+                    result.Body = new { wrongEmail = "This email address does not exist" };
+                    return result;
                 }
             }
-            else
+            catch (Exception e)
             {
-                return NotFound(new { message = "This email address does not exist" });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
             }
         }
+
 
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> ValidateToken(string token)
+        public async Task<IResult> ValidateToken(string token)
         {
-            var tokenDetail = await context.PasswordResetTable.Where(x => x.Token == token && x.PasswordChanged != true && x.TokenTimeOut > DateTime.Now).SingleOrDefaultAsync();
-            if (tokenDetail != null)
+            Result result = new Result();
+            try
             {
-                    return Ok(new { message = "token is valid" });
+                var tokenDetail = await context.PasswordResetTable.Where(x => x.Token == token && x.PasswordChanged != true && x.TokenTimeOut > DateTime.Now).SingleOrDefaultAsync();
+                if (tokenDetail != null)
+                {
+                    result.Body = new { vaildIoken = "token is valid" };
+                    return result;
+                }
+                else
+                {
+                    result.Body = new { invalidToken = "token is not valid" };
+                    return result;
+                }
             }
-            else
+            catch (Exception e)
             {
-                return NotFound(new { invalidToken = "token is not valid" });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
             }
         }
 
+
         [AllowAnonymous]
         [HttpPut]
-        public async Task<IActionResult> ChangePassword(string userToken, string newPassword)
+        public async Task<IResult> ChangePassword(string userToken, string newPassword)
         {
-            var tokenVerify = context.PasswordResetTable.Where(x => x.Token == userToken && x.PasswordChanged != true && x.TokenTimeOut > DateTime.Now).Select(x => x);
-            if (tokenVerify.Any())
+            Result result = new Result();
+            try
             {
-                var tokenDetail = await tokenVerify.SingleOrDefaultAsync();
-                var user = await context.Login.Where(x => x.UserID == tokenDetail.UserID).SingleOrDefaultAsync();
-                user.Password = newPassword;
-                await context.SaveChangesAsync();
-                tokenDetail.PasswordChanged = true;
-                tokenDetail.ResetDate = DateTime.Now;
-                await context.SaveChangesAsync();
-                return Ok(new { success = "Password changed" });
+                var tokenVerify = context.PasswordResetTable.Where(x => x.Token == userToken && x.PasswordChanged != true && x.TokenTimeOut > DateTime.Now).Select(x => x);
+                if (tokenVerify.Any())
+                {
+                    var tokenDetail = await tokenVerify.SingleOrDefaultAsync();
+                    var user = await context.Login.Where(x => x.UserID == tokenDetail.UserID).SingleOrDefaultAsync();
+                    user.Password = newPassword;
+                    await context.SaveChangesAsync();
+                    tokenDetail.PasswordChanged = true;
+                    tokenDetail.ResetDate = DateTime.Now;
+                    await context.SaveChangesAsync();
+
+                    result.Status = true;
+                    result.Body = new { success = "Password changed" };
+                    return result;
+                }
+                else
+                {
+                    result.Body = new { notFound = "This page does not exist." };
+                    return result;
+                }
             }
-            else
+            catch (Exception e)
             {
-                return NotFound(new { notFound = "This page does not exist." });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
             }
         }
-        
+
     }
 }
 
