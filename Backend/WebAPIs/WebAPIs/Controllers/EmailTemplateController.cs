@@ -12,6 +12,7 @@ using System.Security.Claims;
 using System.Security.Principal;
 using Microsoft.EntityFrameworkCore;
 using WebAPIs.Models;
+using System.Net;
 
 namespace WebAPIs.Controllers
 {
@@ -31,40 +32,71 @@ namespace WebAPIs.Controllers
 
         [Authorize(Policy = "AdminOnly")]
         [HttpGet]
-        public async Task<ActionResult> GetTemplate(string templateType)
+        public async Task<IResult> GetTemplate(string templateType)
         {
-            var template = await context.ContentTable.Where(x => x.TemplateName == templateType).FirstOrDefaultAsync();
-            if (template != null)
+            Result result = new Result();
+            try
             {
-                return Ok(template);
+                var template = await context.ContentTable.Where(x => x.TemplateName == templateType).FirstOrDefaultAsync();
+                if (template != null)
+                {
+                    result.Status = true;
+                    result.Body = template;
+                    return result;
+                }
+                else
+                {
+                    result.Message = "Email Template does not exist.";
+                    return result;
+                }
             }
-            else
+            catch (Exception e)
             {
-                return NotFound(new { message = "Email Template does not exist." });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
             }
         }
 
         [Authorize(Policy = "AdminOnly")]
         [HttpPut]
-        public async Task<ActionResult> UpdateTemplate([FromBody] ContentModel contentModel)
+        public async Task<IResult> UpdateTemplate([FromBody] ContentModel contentModel)
         {
-            if (!ModelState.IsValid)
+            Result result = new Result();
+            try
             {
-                return BadRequest(ModelState);
+                if (!ModelState.IsValid)
+                {
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    return result;
+                }
+                var templateObj = await context.ContentTable.Where(x => x.TemplateName == contentModel.TemplateName).FirstOrDefaultAsync();
+                if (templateObj == null)
+                {
+                    result.Message = "Template does not exist.";
+                    return result;
+                }
+                var duplicateContentCheck = context.ContentTable.Where(x => x.TemplateName != contentModel.TemplateName && x.Content == contentModel.Content);
+                if (duplicateContentCheck.Count() != 0)
+                {
+                    result.Body = new { sameContentMessage = "This content already exists for another content template." };
+                    return result;
+                }
+                templateObj.Content = contentModel.Content;
+                await context.SaveChangesAsync();
+
+                result.Status = true;
+                result.Body = new { content = templateObj };
+                return result;
             }
-            var templateObj = await context.ContentTable.Where(x => x.TemplateName == contentModel.TemplateName).FirstOrDefaultAsync();
-            if (templateObj == null)
+            catch (Exception e)
             {
-                return NotFound(new { message = "Template does not exist." });
+                result.StatusCode = HttpStatusCode.InternalServerError;
+                result.Body = e;
+
+                return result;
             }
-            var duplicateContentCheck = context.ContentTable.Where(x => x.TemplateName != contentModel.TemplateName && x.Content == contentModel.Content);
-            if (duplicateContentCheck.Count() != 0)
-            {
-                return Ok(new { sameContentMessage = "This content already exists for another content template." });
-            }
-            templateObj.Content = contentModel.Content;            
-            await context.SaveChangesAsync();            
-            return Ok(new { content =  templateObj});
         }
     }
 }
