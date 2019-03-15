@@ -16,7 +16,11 @@ using WebAPIs.Models;
 
 namespace WebAPIs.Controllers
 {
-    [Route("api/category/[action]")]
+    /// <summary>
+    /// Category controller.
+    /// </summary>    
+    [Route("api/category")]
+    [ApiController]
     public class CategoryController : Controller
     {
         private WebApisContext context;

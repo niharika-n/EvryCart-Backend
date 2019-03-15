@@ -12,12 +12,15 @@ using WebAPIs.Models;
 using System.Linq;
 using System;
 using System.Net;
+using Microsoft.AspNetCore.Http;
 
 namespace WebAPIs.Controllers
 {
-    [Route("api/login/[action]")]
+    /// <summary>
+    /// Login controller.
+    /// </summary>
+    [Route("api/login")]
     [ApiController]
-
     public class LoginController : Controller
     {
         private readonly WebApisContext context;
@@ -31,19 +34,26 @@ namespace WebAPIs.Controllers
             emailService = new EmailService(_config);
         }
 
+
         /// <summary>
         /// Authenticates the user.
         /// </summary>
-        /// <param name="username"></param>
-        /// <param name="password"></param>
+        /// <param name="loginModel">username and password of user.</param>
         /// <returns>
         /// Token string for correct details.
         /// </returns>
-        [AllowAnonymous]
-        [HttpGet]
-        public async Task<IResult> LoginUser([FromQuery] LoginModel loginModel)
+        [HttpGet("loginuser")]
+        [ProducesResponseType(typeof(CategoryViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [AllowAnonymous]        
+        public async Task<ActionResult<IResult>> LoginUser([FromQuery] LoginModel loginModel)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 IActionResult response = Unauthorized();
@@ -51,8 +61,9 @@ namespace WebAPIs.Controllers
                 {
                     if (!ModelState.IsValid)
                     {
+                        result.Status = Status.Fail;
                         result.StatusCode = HttpStatusCode.BadRequest;
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
 
                     var userDetail = from login in context.Login
@@ -61,8 +72,10 @@ namespace WebAPIs.Controllers
                                      select new UserViewModel { UserID = login.UserID, Username = login.Username, EmailID = login.EmailID, FirstName = login.FirstName, ImageContent = login.ImageContent, LastName = login.LastName, RoleID = null };
                     if (userDetail.Count() == 0)
                     {
-                        result.Body = new { message = "Username or Password is incorrect" };
-                        return result;
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
+                        result.Message = "Username or Password is incorrect";
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     var user = await userDetail.FirstOrDefaultAsync();
                     var userRoles = await context.AssignedRolesTable.Where(x => x.UserID == user.UserID).Select(x => x.RoleID).ToArrayAsync();
@@ -70,22 +83,26 @@ namespace WebAPIs.Controllers
                     var tokenString = BuildToken(user);
                     response = Ok(new { token = tokenString, user });
 
-                    result.Status = true;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
                     result.Body = response;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 else
                 {
-                    result.Body = new { message = "Enter username and password" };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message =  "Enter username and password";
+                    return StatusCode((int)result.StatusCode, result);
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
@@ -119,11 +136,25 @@ namespace WebAPIs.Controllers
         }
 
 
+        /// <summary>
+        /// Forgot password to reset new password.
+        /// </summary>
+        /// <param name="Username">Username/Email Address of user.</param>
+        /// <returns>
+        /// Status with message for email status.
+        /// </returns>
+        [HttpGet("forgotpassword")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [AllowAnonymous]
-        [HttpGet]
-        public async Task<IResult> ForgotPassword(string Username)
+        public async Task<ActionResult<IResult>> ForgotPassword(string Username)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var User = from userDetail in context.Login
@@ -148,8 +179,10 @@ namespace WebAPIs.Controllers
                     var template = await context.ContentTable.Where(x => x.TemplateName == "change_password").FirstOrDefaultAsync();
                     if (template == null)
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "Email Template not found.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     var body = template.Content;
 
@@ -162,66 +195,106 @@ namespace WebAPIs.Controllers
 
                     if (mail == "OnSuccess")
                     {
-                        result.Status = true;
-                        result.Body = new { success = "Email sent." };
-                        return result;
+                        result.Status = Status.Success;
+                        result.StatusCode = HttpStatusCode.OK;
+                        result.Message =  "Success";
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     else
                     {
-                        result.Body = new { fail = "Email cound not be sent." };
-                        return result;
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
+                        result.Message = "Fail";
+                        return StatusCode((int)result.StatusCode, result);
                     }
                 }
                 else
                 {
-                    result.Body = new { wrongEmail = "This email address does not exist" };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Body = "wrongEmail";
+                    return StatusCode((int)result.StatusCode, result);
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [AllowAnonymous]
-        [HttpGet]
-        public async Task<IResult> ValidateToken(string token)
+        /// <summary>
+        /// Vadilates reset token.
+        /// </summary>
+        /// <param name="token">Token for reest password.</param>
+        /// <returns>
+        /// Returns status for email message sent.
+        /// </returns>
+        [HttpGet("validatetoken")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [AllowAnonymous]      
+        public async Task<ActionResult<IResult>> ValidateToken(string token)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var tokenDetail = await context.PasswordResetTable.Where(x => x.Token == token && x.PasswordChanged != true && x.TokenTimeOut > DateTime.Now).SingleOrDefaultAsync();
                 if (tokenDetail != null)
                 {
-                    result.Body = new { vaildIoken = "token is valid" };
-                    return result;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
+                    result.Message = "validIoken";
+                    return StatusCode((int)result.StatusCode, result); ;
                 }
                 else
                 {
-                    result.Body = new { invalidToken = "token is not valid" };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "invalidToken";
+                    return StatusCode((int)result.StatusCode, result); ;
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [AllowAnonymous]
-        [HttpPut]
-        public async Task<IResult> ChangePassword(string userToken, string newPassword)
+        /// <summary>
+        /// Change user paswword.
+        /// </summary>
+        /// <param name="userToken">usertoken for verification of url</param>
+        /// <param name="newPassword">new password for user.</param>
+        /// <returns>
+        /// Status with message string.
+        /// </returns>
+        [HttpPut("changepassword")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [AllowAnonymous]        
+        public async Task<ActionResult<IResult>> ChangePassword(string userToken, string newPassword)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Update,
+                Status = Status.Success
+            };
             try
             {
                 var tokenVerify = context.PasswordResetTable.Where(x => x.Token == userToken && x.PasswordChanged != true && x.TokenTimeOut > DateTime.Now).Select(x => x);
@@ -235,22 +308,26 @@ namespace WebAPIs.Controllers
                     tokenDetail.ResetDate = DateTime.Now;
                     await context.SaveChangesAsync();
 
-                    result.Status = true;
-                    result.Body = new { success = "Password changed" };
-                    return result;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
+                    result.Message = "success";
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 else
                 {
-                    result.Body = new { notFound = "This page does not exist." };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "This page does not exist.";
+                    return StatusCode((int)result.StatusCode, result);
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 

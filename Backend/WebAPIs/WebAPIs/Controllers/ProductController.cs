@@ -20,6 +20,7 @@ namespace WebAPIs.Controllers
     /// Product Controller.
     /// </summary>
     [Route("api/product")]
+    [ApiController]
     public class ProductController : ControllerBase
     {
         private WebApisContext context;
