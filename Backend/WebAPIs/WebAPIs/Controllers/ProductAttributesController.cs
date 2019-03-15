@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebAPIs.Data;
@@ -12,7 +14,11 @@ using WebAPIs.Models;
 
 namespace WebAPIs.Controllers
 {
-    [Route("api/ProductAttributes/[action]")]
+    /// <summary>
+    /// Product Attribute controller.
+    /// </summary>
+    [Route("api/productattributes")]
+    [ApiController]
     public class ProductAttributesController : ControllerBase
     {
         private WebApisContext context;
@@ -26,57 +32,100 @@ namespace WebAPIs.Controllers
             helper = new Helper(_principal);
         }
 
+
+        /// <summary>
+        /// Prpduct attribute value.
+        /// </summary>
+        /// <param name="id">Id of product attribute.</param>
+        /// <returns>
+        /// Detail of product attribtue.
+        /// </returns>
+        [HttpGet("detail/{id}")]
+        [ProducesResponseType(typeof(ProductAttributeViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        [HttpGet("{id}")]
-        public async Task<IResult> Detail(int? id)
+        public async Task<ActionResult<IResult>> Detail(int? id)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 if (id != 0)
-                {                    
-                    var attribute = await context.ProductAttributes.Where(x => x.AttributeID == id).FirstOrDefaultAsync();
-                    if (attribute != null)
+                {
+                    var attributeDetail = from attribute in context.ProductAttributes
+                                          where attribute.AttributeID == id
+                                          select new ProductAttributeViewModel
+                                          { AttributeID = attribute.AttributeID, AttributeName = attribute.AttributeName, CreatedBy = attribute.CreatedBy, AssociatedProductValues = 0, CreatedDate = attribute.CreatedDate, ModifiedBy = attribute.ModifiedBy, ModifiedDate = attribute.ModifiedDate, CreatedUser = "", ModifiedUser = "" };
+                    var attributeObj = await attributeDetail.FirstOrDefaultAsync();
+                    if (attributeObj != null)
                     {
-                        result.Status = true;
-                        result.Body = attribute;
-                        return result;
+                        result.Status = Status.Success;
+                        result.StatusCode = HttpStatusCode.OK;
+                        result.Body = attributeObj;
+                        return StatusCode((int)result.StatusCode, result); 
                     }
                     else
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "Attribute does not exist.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result); 
                     }
                 }
+                result.Status = Status.Fail;
+                result.StatusCode = HttpStatusCode.BadRequest;
                 result.Message = "Attribute ID is not valid.";
-                return result;
+                return StatusCode((int)result.StatusCode, result); 
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpPost]
-        public async Task<IResult> InsertAttribute([FromBody] ProductAttribute productAttribute)
+
+        /// <summary>
+        /// Insert Product attribute.
+        /// </summary>
+        /// <param name="productAttribute">Object of product attribute.</param>
+        /// <returns>
+        /// Status of attribute added.
+        /// </returns>
+        [HttpPost("insertattribute")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> InsertAttribute([FromBody] ProductAttribute productAttribute)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Create,
+                Status = Status.Success
+            };
             try
             {
                 if (!ModelState.IsValid)
                 {
+                    result.Status = Status.Success;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var attributeNameCheck = await context.ProductAttributes.Where(x => x.AttributeName == productAttribute.AttributeName).ToListAsync();
                 if (attributeNameCheck.Count() != 0)
                 {
-                    result.Body = new { message = "Attribute exists already" };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "Attribute exists already";
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 productAttribute.CreatedDate = DateTime.Now;
                 productAttribute.CreatedBy = helper.GetSpecificClaim("ID");
@@ -88,41 +137,64 @@ namespace WebAPIs.Controllers
                     CreatedUser = helper.GetSpecificClaim("Name")
                 };
 
-                result.Body = new { attribute = productAttribute };
-                result.Status = true;
-                return result;
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Body = productAttribute;                
+                return StatusCode((int)result.StatusCode, result); 
             }
             catch (Exception e)
             {
-                result.Body = e;
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                return result;
+
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpPut]
-        public async Task<IResult> UpdateAttribute([FromBody] ProductAttribute productAttribute)
+
+        /// <summary>
+        /// Updates attribute.
+        /// </summary>
+        /// <param name="productAttribute">Object of attribute.</param>
+        /// <returns>
+        /// Statisu of attribute updated.
+        /// </returns>
+        [HttpPut("updateattribute")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> UpdateAttribute([FromBody] ProductAttribute productAttribute)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Update,
+                Status = Status.Success
+            };
             try
             {
                 if (!ModelState.IsValid)
                 {
+                    result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var attributeObj = context.ProductAttributes.Where(x => x.AttributeID == productAttribute.AttributeID).SingleOrDefault();
                 if (attributeObj == null)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Attribute does not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var attributeNameCheck = await context.ProductAttributes.Where(x => (x.AttributeName == productAttribute.AttributeName) && (x.AttributeID != productAttribute.AttributeID)).ToListAsync();
                 if (attributeNameCheck.Count() != 0)
                 {
-                    result.Body = new { message = "Attribute exists already" };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Body = "Attribute exists already";
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 attributeObj.AttributeID = productAttribute.AttributeID;
                 attributeObj.AttributeName = productAttribute.AttributeName;
@@ -133,25 +205,42 @@ namespace WebAPIs.Controllers
                 {
                     ModifiedUser = helper.GetSpecificClaim("Name")
                 };
-                result.Status = true;
-                result.Body = new { attribute = attributeObj };
-
-                return result;
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Body = attributeObj;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpGet]
-        public async Task<IResult> Listing(DataHelperModel dataHelper, bool getAll)
+
+        /// <summary>
+        /// List of product attribute.
+        /// </summary>
+        /// <param name="dataHelper">Datahelper object for paging and sorting the list.</param>
+        /// <param name="getAll">Chekc ot get all product attributes.</param>
+        /// <returns>
+        /// List of product attributes.
+        /// </returns>
+        [HttpGet("listing")]
+        [ProducesResponseType(typeof(List<ProductAttributeViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]       
+        public async Task<ActionResult<IResult>> Listing(DataHelperModel dataHelper, bool getAll)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var listQuery = from attribute in context.ProductAttributes
@@ -199,44 +288,66 @@ namespace WebAPIs.Controllers
                     resultModel.TotalCount = resultCount;
                     if (resultList.Count == 0)
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "No records present.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
 
-                    result.Status = true;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Body = resultModel;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 else
                 {
                     listQuery = listQuery.OrderBy(x => x.AttributeName);
                     var attributeList = await listQuery.ToListAsync();
                     result.Body = attributeList;
-                    result.Status = true;
-                    return result;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
+                    return StatusCode((int)result.StatusCode, result);
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpDelete]
-        public async Task<IResult> Delete(int Id)
+
+        /// <summary>
+        /// Deletes the product attribute.
+        /// </summary>
+        /// <param name="Id">Id of product attribute.</param>
+        /// <returns>
+        /// Status for attribute deleted with message.
+        /// </returns>
+        [HttpDelete("delete")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> Delete(int Id)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Delete,
+                Status = Status.Success
+            };
             try
             {
                 var deleteQuery = await context.ProductAttributes.Where(x => x.AttributeID == Id).FirstOrDefaultAsync();
                 if (deleteQuery == null)
                 {
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Attribute does not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 context.ProductAttributes.Remove(deleteQuery);
                 await context.SaveChangesAsync();
@@ -247,18 +358,20 @@ namespace WebAPIs.Controllers
                     context.ProductAttributeValues.RemoveRange(attributeValues);
                     await context.SaveChangesAsync();
                 }
-                result.Status = true;
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
                 result.Message = "Deleted successfully.";
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
 
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
     }
