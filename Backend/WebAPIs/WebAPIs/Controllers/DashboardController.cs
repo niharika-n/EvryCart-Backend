@@ -23,11 +23,25 @@ namespace WebAPIs.Controllers
             context = APIcontext;
         }
 
+
+        /// <summary>
+        /// Gets count for categories and products.
+        /// </summary>
+        /// <returns>
+        /// Returns count for categories and products and their updated values.
+        /// </returns>
+        [HttpGet("getcount")]
+        [ProducesResponseType(typeof(StatisticsModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        [HttpGet]
-        public async Task<IResult> GetCount()
+        public async Task<ActionResult<IResult>> GetCount()
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 StatisticsModel statisticsModel = new StatisticsModel();
@@ -45,16 +59,19 @@ namespace WebAPIs.Controllers
                 statisticsModel.ProductResult = await productQuery.Take(5).ToListAsync();
                 statisticsModel.CategoryCount = categoryQuery.ToList().Count;
                 statisticsModel.ProductCount = productQuery.ToList().Count;
-                result.Status = true;
+
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
                 result.Body = statisticsModel;
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
     }
