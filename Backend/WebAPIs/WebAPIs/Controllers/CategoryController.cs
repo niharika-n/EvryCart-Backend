@@ -52,17 +52,23 @@ namespace WebAPIs.Controllers
             {
                 if (id != 0)
                 {
-                    var detail = await context.Categories.Where(x => x.CategoryID == id && x.IsDeleted != true).FirstOrDefaultAsync();
-                    if (detail != null)
+                    var categoryViewModel = from category in context.Categories
+                                            where category.CategoryID == id
+                                            && category.IsDeleted != true
+                                            select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
+                    var categoryObj = await categoryViewModel.FirstOrDefaultAsync();
+
+                    var imageDetail = await context.Categories.Where(x => x.CategoryID == id && x.IsDeleted != true).Select(x => x.ImageID).FirstOrDefaultAsync();
+                    if (categoryObj != null)
                     {
-                        var image = context.Images.Where(x => x.ImageID == detail.ImageID).FirstOrDefault();
+                        var image = context.Images.Where(x => x.ImageID == imageDetail).FirstOrDefault();
                         if (image != null)
                         {
-                            detail.ImageContent = image.ImageContent;
+                            categoryObj.ImageContent = image.ImageContent;
                         }
                         result.StatusCode = HttpStatusCode.OK;
                         result.Status = Status.Success;
-                        result.Body = detail;
+                        result.Body = categoryObj;
                         return StatusCode((int)result.StatusCode, result);
                     }
                     else
@@ -95,7 +101,7 @@ namespace WebAPIs.Controllers
         /// <returns>
         /// Status of category interested.
         /// </returns>
-        [HttpPost("insertcategory")]        
+        [HttpPost("insertcategory")]
         [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -186,7 +192,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [Authorize(Policy = "AdminOnly")]       
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IResult>> UpdateCategory()
         {
             var result = new Result
@@ -415,7 +421,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [Authorize(Policy = "AdminOnly")]        
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IResult>> Delete(int Id)
         {
             var result = new Result
@@ -486,7 +492,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(List<ProductViewModel>), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [Authorize(Policy = "AdminOnly")]        
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IResult>> GetAssociatedProducts(int id, DataHelperModel dataHelper)
         {
             var result = new Result
@@ -558,7 +564,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [AllowAnonymous]        
+        [AllowAnonymous]
         public async Task<ActionResult<IResult>> GetCategoriesForCustomer()
         {
             var result = new Result
@@ -610,7 +616,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [AllowAnonymous]        
+        [AllowAnonymous]
         public async Task<ActionResult<IResult>> GetChildCategoriesForCustomer(int id)
         {
             var result = new Result
@@ -624,7 +630,7 @@ namespace WebAPIs.Controllers
                                     where category.ChildCategory == id && category.IsDeleted != true
                                     select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
 
-                var list =  await childCategory.ToListAsync();
+                var list = await childCategory.ToListAsync();
                 if (childCategory.Count() == 0)
                 {
                     result.Status = Status.Fail;
@@ -659,7 +665,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [AllowAnonymous]        
+        [AllowAnonymous]
         public async Task<ActionResult<IResult>> GetLatestCategoriesForCustomer()
         {
             var result = new Result

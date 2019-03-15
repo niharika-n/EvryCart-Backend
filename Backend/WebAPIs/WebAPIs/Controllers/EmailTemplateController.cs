@@ -30,72 +30,116 @@ namespace WebAPIs.Controllers
             helper = new Helper(_principal);
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpGet]
-        public async Task<IResult> GetTemplate(string templateType)
+
+        /// <summary>
+        /// Gets template.
+        /// </summary>
+        /// <param name="templateType">Template name for selected template.</param>
+        /// <returns>
+        /// Returns selected template.
+        /// </returns>
+        [HttpGet("gettemplate")]
+        [ProducesResponseType(typeof(ContentViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> GetTemplate(string templateType)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
-                var template = await context.ContentTable.Where(x => x.TemplateName == templateType).FirstOrDefaultAsync();
-                if (template != null)
+                var templateModel = from template in context.ContentTable
+                                    where template.TemplateName == templateType
+                                    select new ContentViewModel { ID = template.ID, TemplateName = template.TemplateName, Content = template.Content};
+                var templateObj = await templateModel.FirstOrDefaultAsync();
+
+                if (templateObj != null)
                 {
-                    result.Status = true;
-                    result.Body = template;
-                    return result;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
+                    result.Body = templateObj;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 else
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Email Template does not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpPut]
-        public async Task<IResult> UpdateTemplate([FromBody] ContentModel contentModel)
+
+        /// <summary>
+        /// Updates template.
+        /// </summary>
+        /// <param name="contentModel">Template name of selected template.</param>
+        /// <returns>
+        /// Status of template updated.
+        /// </returns>
+        [HttpPut("updatetemplate")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]       
+        public async Task<ActionResult<IResult>> UpdateTemplate([FromBody] ContentModel contentModel)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Update,
+                Status = Status.Success
+            };
             try
             {
                 if (!ModelState.IsValid)
                 {
+                    result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var templateObj = await context.ContentTable.Where(x => x.TemplateName == contentModel.TemplateName).FirstOrDefaultAsync();
                 if (templateObj == null)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Template does not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var duplicateContentCheck = context.ContentTable.Where(x => x.TemplateName != contentModel.TemplateName && x.Content == contentModel.Content);
                 if (duplicateContentCheck.Count() != 0)
                 {
-                    result.Body = new { sameContentMessage = "This content already exists for another content template." };
-                    return result;
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "sameContentMessage";
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 templateObj.Content = contentModel.Content;
                 await context.SaveChangesAsync();
 
-                result.Status = true;
-                result.Body = new { content = templateObj };
-                return result;
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
     }
