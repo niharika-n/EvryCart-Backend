@@ -108,10 +108,10 @@ namespace WebAPIs.Controllers
         /// </summary>
         /// <param name="product">Object of ProductModel.</param>
         /// <returns>
-        /// Value of product added.
+        /// Status of product added.
         /// </returns>
         [HttpPost("insertproduct")]
-        [ProducesResponseType(typeof(ProductViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -164,7 +164,6 @@ namespace WebAPIs.Controllers
 
                 result.Status = Status.Success;
                 result.StatusCode = HttpStatusCode.OK;
-                result.Body = product;               
                 return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
@@ -183,10 +182,10 @@ namespace WebAPIs.Controllers
         /// </summary>
         /// <param name="product">Object of product model.</param>
         /// <returns>
-        /// Value of product updated.
+        /// Status of product updated.
         /// </returns>
         [HttpPut("updateproduct")]
-        [ProducesResponseType(typeof(ProductViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -265,7 +264,6 @@ namespace WebAPIs.Controllers
                 };
                 result.StatusCode = HttpStatusCode.OK;
                 result.Status = Status.Success;
-                result.Body = productObj;
                 return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
@@ -586,7 +584,7 @@ namespace WebAPIs.Controllers
         /// Details of new attribute added.
         /// </returns>
         [HttpPost("insertproductattributevalue")]
-        [ProducesResponseType(typeof(ProductAttributeValues), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -626,7 +624,6 @@ namespace WebAPIs.Controllers
 
                 result.StatusCode = HttpStatusCode.OK;
                 result.Status = Status.Success;
-                result.Body = attributeValue;
                 return StatusCode((int)result.StatusCode, result); 
             }
             catch (Exception e)
@@ -648,7 +645,7 @@ namespace WebAPIs.Controllers
         /// Details of updated attribute.
         /// </returns>
         [HttpPut("updateproductattributevalue")]
-        [ProducesResponseType(typeof(ProductAttributeValues), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -693,7 +690,6 @@ namespace WebAPIs.Controllers
 
                 result.StatusCode = HttpStatusCode.OK;
                 result.Status = Status.Success;
-                result.Body = attribute;
                 return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
@@ -715,7 +711,7 @@ namespace WebAPIs.Controllers
         /// Details of selected product attribute. 
         /// </returns>
         [HttpGet("getdetailproductattributevalue/{id}")]
-        [ProducesResponseType(typeof(ProductAttributeValues), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -747,7 +743,6 @@ namespace WebAPIs.Controllers
 
                     result.StatusCode = HttpStatusCode.OK;
                     result.Status = Status.Success;
-                    result.Body = attributeValue;
                     return StatusCode((int)result.StatusCode, result);
                 }                
                 result.Status = Status.Fail;
@@ -774,7 +769,7 @@ namespace WebAPIs.Controllers
         /// Paged list of product attributes.
         /// </returns>
         [HttpGet("getlistproductattributevalue/{id}")]
-        [ProducesResponseType(typeof(List<ProductAttributeValues>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(List<ProductAttributeValueViewModel>), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]

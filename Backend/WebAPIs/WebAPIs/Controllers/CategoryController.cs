@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -29,11 +30,24 @@ namespace WebAPIs.Controllers
             helper = new Helper(_principal);
         }
 
+
+        /// <summary>
+        /// Selected category detail.
+        /// </summary>
+        /// <param name="id">Id of caegory.</param>
+        /// <returns>Detail of selected category.</returns>
+        [HttpGet("detail/{id}")]
+        [ProducesResponseType(typeof(CategoryViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        [HttpGet("{id}")]
-        public async Task<IResult> Detail(int? id)
+        public async Task<ActionResult<IResult>> Detail(int? id)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 if (id != 0)
@@ -46,42 +60,60 @@ namespace WebAPIs.Controllers
                         {
                             detail.ImageContent = image.ImageContent;
                         }
-                        result.Status = true;
+                        result.StatusCode = HttpStatusCode.OK;
+                        result.Status = Status.Success;
                         result.Body = detail;
-
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     else
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "Category does not exist.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                 }
+                result.StatusCode = HttpStatusCode.BadRequest;
+                result.Status = Status.Fail;
                 result.Message = "Category ID is not correct.";
-
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
-                result.Body = e;
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
+        /// <summary>
+        /// Insert category.
+        /// </summary>
+        /// <returns>
+        /// Status of category interested.
+        /// </returns>
+        [HttpPost("insertcategory")]        
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        [HttpPost]
-        public async Task<IResult> InsertCategory()
+        public async Task<ActionResult<IResult>> InsertCategory()
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Create,
+                Status = Status.Success
+            };
             try
             {
                 if (!ModelState.IsValid)
                 {
+                    result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var categoryFile = JsonConvert.DeserializeObject<CategoryModel>(Request.Form["category"]);
                 CategoryModel category = new CategoryModel();
@@ -106,8 +138,10 @@ namespace WebAPIs.Controllers
                 var categoryCheck = context.Categories.Where(x => x.CategoryName == categoryFile.CategoryName).ToList();
                 if (categoryCheck.Count() != 0)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "This category already exists.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 category.CategoryID = categoryFile.CategoryID;
                 category.CategoryName = categoryFile.CategoryName;
@@ -127,39 +161,56 @@ namespace WebAPIs.Controllers
                 {
                     CreatedUser = helper.GetSpecificClaim("Name")
                 };
-                result.Status = true;
-                result.Body = new { categoryObj = category };
-                return result;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Status = Status.Success;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpPut]
-        public async Task<IResult> UpdateCategory()
+        /// <summary>
+        /// Update category.
+        /// </summary>
+        /// <returns>
+        /// Status of category updated.
+        /// </returns>
+        [HttpPut("updatecategory")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]       
+        public async Task<ActionResult<IResult>> UpdateCategory()
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Update,
+                Status = Status.Success
+            };
             try
             {
                 if (!ModelState.IsValid)
                 {
+                    result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 Images images = new Images();
                 var file = JsonConvert.DeserializeObject<CategoryModel>(Request.Form["category"]);
                 var categoryCheck = context.Categories.Where(x => x.CategoryName == file.CategoryName && x.CategoryID != file.CategoryID && x.IsDeleted != true).Any();
                 if (categoryCheck)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "This category already exists.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 var category = context.Categories.Where(x => x.CategoryID == file.CategoryID && x.IsDeleted != true).FirstOrDefault();
                 category.CategoryID = file.CategoryID;
@@ -193,8 +244,10 @@ namespace WebAPIs.Controllers
                     IFormFile img = null;
                     if (category == null)
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "Category does not exist.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     var image = Request.Form.Files;
                     img = image[0];
@@ -218,25 +271,42 @@ namespace WebAPIs.Controllers
                 {
                     ModifiedUser = helper.GetSpecificClaim("Name")
                 };
-                result.Status = true;
-                result.Body = new { categoryObj = category };
-                return result;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Status = Status.Success;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
-                result.Body = e;
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
+        /// <summary>
+        /// Category list.
+        /// </summary>
+        /// <param name="dataHelper">DataHelper object of paging and sorting list.</param>
+        /// <param name="getAllParent">Check to select to all parent categories.</param>
+        /// <param name="getAll">Check to select all categories.</param>
+        /// <returns>
+        /// Returns list of category.
+        /// </returns>
+        [HttpGet("listing")]
+        [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        [HttpGet]
-        public async Task<IResult> Listing(DataHelperModel dataHelper, bool getAllParent, bool getAll)
+        public async Task<ActionResult<IResult>> Listing(DataHelperModel dataHelper, bool getAllParent, bool getAll)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var listQuery = from category in context.Categories
@@ -291,12 +361,15 @@ namespace WebAPIs.Controllers
                     resultModel.TotalCount = resultCount;
                     if (resultList.Count == 0)
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "No records present.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
-                    result.Status = true;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
                     result.Body = resultModel;
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 else
                 {
@@ -305,40 +378,60 @@ namespace WebAPIs.Controllers
                         listQuery = listQuery.Where(x => x.Child == null).OrderBy(x => x.Name);
                         var categoryList = await listQuery.ToListAsync();
                         result.Body = categoryList;
-                        result.Status = true;
-                        return result;
+                        result.Status = Status.Success;
+                        result.StatusCode = HttpStatusCode.OK;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     else
                     {
                         listQuery = listQuery.OrderBy(x => x.Name);
                         var categoryList = await listQuery.ToListAsync();
+                        result.StatusCode = HttpStatusCode.OK;
                         result.Body = categoryList;
-                        result.Status = true;
-                        return result;
+                        result.Status = Status.Success;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                 }
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
-                return result;
+
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpDelete]
-        public async Task<IResult> Delete(int Id)
+        /// <summary>
+        /// Deletes category.
+        /// </summary>
+        /// <param name="Id">Id of selected product.</param>
+        /// <returns>
+        /// Status with success message.
+        /// </returns>
+        [HttpDelete("delete")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> Delete(int Id)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Delete,
+                Status = Status.Success
+            };
             try
             {
                 var category = await context.Categories.Where(x => x.CategoryID == Id && x.IsDeleted != true).FirstOrDefaultAsync();
                 if (category == null)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Category does not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 category.IsDeleted = true;
                 var deletedCategory = await context.SaveChangesAsync();
@@ -365,26 +458,42 @@ namespace WebAPIs.Controllers
                         }
                     }
                 }
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
                 result.Message = "Deleted successfully.";
-                result.Status = true;
-
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpGet("{id}")]
-        public async Task<IResult> GetAssociatedProducts(int id, DataHelperModel dataHelper)
+        /// <summary>
+        /// Product list.
+        /// </summary>
+        /// <param name="id">Id of selected category.</param>
+        /// <param name="dataHelper">Datahelper object for paging and sorting list.</param>
+        /// <returns>
+        /// Returns list of products for selected category.
+        /// </returns>
+        [HttpGet("getassociatedproducts/{id}")]
+        [ProducesResponseType(typeof(List<ProductViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> GetAssociatedProducts(int id, DataHelperModel dataHelper)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 if (id != 0)
@@ -396,8 +505,10 @@ namespace WebAPIs.Controllers
                                   select new ProductViewModel { ProductName = products.ProductName, ProductID = products.ProductID, ShortDescription = products.ShortDescription, CategoryID = products.CategoryID, CategoryName = "", IsActive = products.IsActive, CreatedBy = products.CreatedBy, CreatedDate = products.CreatedDate, CreatedUser = "", Price = products.Price, QuantityInStock = products.QuantityInStock, VisibleEndDate = products.VisibleEndDate, AllowCustomerReviews = products.AllowCustomerReviews, DiscountPercent = products.DiscountPercent, VisibleStartDate = products.VisibleStartDate, IsDiscounted = products.IsDiscounted, LongDescription = products.LongDescription, MarkNew = products.MarkNew, ModelNumber = products.ModelNumber, ModifiedBy = products.ModifiedBy, ModifiedDate = products.ModifiedDate, ModifiedUser = "", OnHomePage = products.OnHomePage, ShipingEnabled = products.ShipingEnabled, ShippingCharges = products.ShippingCharges, Tax = products.Tax, TaxExempted = products.TaxExempted, QuantityType = products.QuantityType };
                     if (product.Count() == 0)
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "Products do not exist for the category.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
                     var list = product;
                     list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
@@ -409,32 +520,52 @@ namespace WebAPIs.Controllers
                     resultModel.TotalCount = resultCount;
                     if (resultList.Count == 0)
                     {
+                        result.Status = Status.Fail;
+                        result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "No records present.";
-                        return result;
+                        return StatusCode((int)result.StatusCode, result);
                     }
-                    result.Status = true;
-                    result.Body = resultModel;
 
-                    return result;
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
+                    result.Body = resultModel;
+                    return StatusCode((int)result.StatusCode, result);
                 }
+
+                result.Status = Status.Fail;
+                result.StatusCode = HttpStatusCode.BadRequest;
                 result.Message = "ID entered is null.";
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [AllowAnonymous]
-        [HttpGet]
-        public async Task<IResult> GetCategoriesForCustomer()
+        /// <summary>
+        /// Category list.
+        /// </summary>
+        /// <returns>
+        /// Returns list of categories for home page.
+        /// </returns>
+        [HttpGet("getcategoriesforcustomer")]
+        [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [AllowAnonymous]        
+        public async Task<ActionResult<IResult>> GetCategoriesForCustomer()
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var categories = from category in context.Categories
@@ -444,64 +575,98 @@ namespace WebAPIs.Controllers
                 var categoryList = await categories.ToListAsync();
                 if (categoryList.Count == 0)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Categories do not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
                 ResultModel resultModel = new ResultModel();
                 resultModel.CategoryResult = categoryList;
 
-                result.Status = true;
+                result.Status = Status.Success;
+                result.Status = Status.Success;
                 result.Body = resultModel;
-
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
-                result.Body = e;
-                result.StatusCode = HttpStatusCode.BadRequest;
+                result.Status = Status.Error;
+                result.Message = e.Message;
+                result.StatusCode = HttpStatusCode.InternalServerError;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [AllowAnonymous]
-        [HttpGet("{id}")]
-        public async Task<IResult> GetChildCategoriesForCustomer(int id)
+        /// <summary>
+        /// Cateogry list.
+        /// </summary>
+        /// <param name="id">Id of category.</param>
+        /// <returns>
+        /// Returns list of child categories for selected category.
+        /// </returns>
+        [HttpGet("getchildcategoriesforcustomer/{id}")]
+        [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [AllowAnonymous]        
+        public async Task<ActionResult<IResult>> GetChildCategoriesForCustomer(int id)
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var childCategory = from category in context.Categories
                                     where category.ChildCategory == id && category.IsDeleted != true
                                     select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
 
-                await childCategory.ToListAsync();
+                var list =  await childCategory.ToListAsync();
                 if (childCategory.Count() == 0)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Categories do not exist.";
-                    return result;
+                    return StatusCode((int)result.StatusCode, result);
                 }
-                result.Status = true;
-                result.Body = childCategory;
 
-                return result;
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Body = list;
+                return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
 
-        [AllowAnonymous]
-        [HttpGet]
-        public async Task<IResult> GetLatestCategoriesForCustomer()
+        /// <summary>
+        /// Category list.
+        /// </summary>
+        /// <returns>
+        /// Returns latest categories for home page.
+        /// </returns>
+        [HttpGet("getlatestcategoriesforcustomer")]
+        [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [AllowAnonymous]        
+        public async Task<ActionResult<IResult>> GetLatestCategoriesForCustomer()
         {
-            Result result = new Result();
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
             try
             {
                 var categories = from category in context.Categories
@@ -515,19 +680,24 @@ namespace WebAPIs.Controllers
                 var categoryList = await categories.Take(3).ToListAsync();
                 if (categoryList.Count == 0)
                 {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
                     result.Message = "Categories does not exist";
                     return result;
                 }
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
                 result.Body = categoryList;
-                result.Status = true;
+                result.Status = Status.Success;
                 return result;
             }
             catch (Exception e)
             {
+                result.Status = Status.Error;
+                result.Message = e.Message;
                 result.StatusCode = HttpStatusCode.InternalServerError;
-                result.Body = e;
 
-                return result;
+                return StatusCode((int)result.StatusCode, result);
             }
         }
     }
