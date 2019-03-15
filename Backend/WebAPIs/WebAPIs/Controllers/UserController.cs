@@ -53,7 +53,7 @@ namespace WebAPIs.Controllers
             }
             IFormFile img = null;
             var file = JsonConvert.DeserializeObject<UserModel>(Request.Form["model"]);
-            var userRoles = JsonConvert.DeserializeObject<RoleTypes[]>(Request.Form["role"]);
+            var userRoles = JsonConvert.DeserializeObject<Enums[]>(Request.Form["role"]);
             UserModel user = new UserModel();
             var image = Request.Form.Files;
             foreach (var i in image)
@@ -143,12 +143,12 @@ namespace WebAPIs.Controllers
             user.ImageContent = imageService.Image(img);
             context.Login.Add(user);
             await context.SaveChangesAsync();
-            var totalRoles = Enum.GetValues(typeof(RoleTypes)).Cast<int>();
+            var totalRoles = Enum.GetValues(typeof(Enums)).Cast<int>();
             var selectedRoles = userRoles.Intersect(totalRoles).ToArray();
-            List<RoleTypes> roleList = new List<RoleTypes>();
+            List<Enums> roleList = new List<Enums>();
             foreach (var role in selectedRoles)
             {
-                RoleTypes roleVal = (RoleTypes)role;
+                Enums roleVal = (Enums)role;
                 roleList.Add(roleVal);
             }
             var roleTypes = roleList.ToArray();
@@ -168,7 +168,7 @@ namespace WebAPIs.Controllers
             }
         }
 
-        private dynamic AssignUserRole(int createdID, bool fromAdmin, params RoleTypes[] roles)
+        private dynamic AssignUserRole(int createdID, bool fromAdmin, params Enums[] roles)
         {
             var userRoles = context.AssignedRolesTable.Where(x => x.UserID == createdID).Select(x => x.RoleID).ToArray();
             if (userRoles.Count() == 0)
@@ -188,10 +188,10 @@ namespace WebAPIs.Controllers
                 else
                 {
                     var assignedNewRole = context.AssignedRolesTable.Where(x => x.UserID == createdID).Select(x => x.RoleID).ToArray();
-                    if (assignedNewRole.Contains((int)RoleTypes.Admin) && assignedNewRole.Count() == 1)
+                    if (assignedNewRole.Contains((int)Enums.Admin) && assignedNewRole.Count() == 1)
                     {
                         AssignedRolesModel assignedRoles = new AssignedRolesModel();
-                        assignedRoles.RoleID = (int)RoleTypes.User;
+                        assignedRoles.RoleID = (int)Enums.User;
                         assignedRoles.UserID = createdID;
                         context.AssignedRolesTable.Add(assignedRoles);
                         context.SaveChangesAsync();

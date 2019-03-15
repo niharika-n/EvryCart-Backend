@@ -9,12 +9,12 @@ namespace WebAPIs.Data
 {
     public class RoleRequirement : IAuthorizationRequirement
     {
-        public RoleRequirement(params RoleTypes[] role)
+        public RoleRequirement(params Enums[] role)
         {
             roleID = role;
         }
 
-        public RoleTypes[] roleID { get; set; }
+        public Enums[] roleID { get; set; }
     }
 
 }

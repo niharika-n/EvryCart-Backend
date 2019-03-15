@@ -68,9 +68,9 @@ namespace WebAPIs
 
             services.AddAuthorization(options =>
             {
-                options.AddPolicy("AdminOnly", policy => policy.AddRequirements(new RoleRequirement(RoleTypes.Admin)));
-                options.AddPolicy("UserOnly", policy => policy.AddRequirements(new RoleRequirement(RoleTypes.User)));
-                options.AddPolicy("SuperAdminOnly", policy => policy.AddRequirements(new RoleRequirement(RoleTypes.SuperAdmin)));
+                options.AddPolicy("AdminOnly", policy => policy.AddRequirements(new RoleRequirement(Enums.Admin)));
+                options.AddPolicy("UserOnly", policy => policy.AddRequirements(new RoleRequirement(Enums.User)));
+                options.AddPolicy("SuperAdminOnly", policy => policy.AddRequirements(new RoleRequirement(Enums.SuperAdmin)));
             });
             services.AddSingleton<IAuthorizationHandler, RoleHandler>();
 
