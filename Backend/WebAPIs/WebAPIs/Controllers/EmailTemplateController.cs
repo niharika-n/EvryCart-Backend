@@ -16,6 +16,9 @@ using System.Net;
 
 namespace WebAPIs.Controllers
 {
+    /// <summary>
+    /// Email controller.
+    /// </summary>
     [Route("api/emailtemplate")]
     [ApiController]
     public class EmailTemplateController : ControllerBase

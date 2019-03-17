@@ -12,7 +12,10 @@ using WebAPIs.Models;
 
 namespace WebAPIs.Controllers
 {
-    [Route("api/[controller]")]
+    /// <summary>
+    /// Dashboard controller.
+    /// </summary>
+    [Route("api/dashboard")]
     [ApiController]
     public class DashboardController : ControllerBase
     {

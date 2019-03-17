@@ -124,7 +124,7 @@ namespace WebAPIs.Controllers
                 {
                     result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    result.Message = "Attribute exists already";
+                    result.Message = "isPresent";
                     return StatusCode((int)result.StatusCode, result);
                 }
                 productAttribute.CreatedDate = DateTime.Now;
@@ -185,7 +185,7 @@ namespace WebAPIs.Controllers
                 {
                     result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    result.Message = "Attribute does not exist.";
+                    result.Message = "isEmpty";
                     return StatusCode((int)result.StatusCode, result);
                 }
                 var attributeNameCheck = await context.ProductAttributes.Where(x => (x.AttributeName == productAttribute.AttributeName) && (x.AttributeID != productAttribute.AttributeID)).ToListAsync();
@@ -193,7 +193,7 @@ namespace WebAPIs.Controllers
                 {
                     result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    result.Body = "Attribute exists already";
+                    result.Message = "isPresent";
                     return StatusCode((int)result.StatusCode, result);
                 }
                 attributeObj.AttributeID = productAttribute.AttributeID;
@@ -234,7 +234,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]       
-        public async Task<ActionResult<IResult>> Listing(DataHelperModel dataHelper, bool getAll)
+        public async Task<ActionResult<IResult>> Listing([FromQuery] DataHelperModel dataHelper, bool getAll)
         {
             var result = new Result
             {
@@ -295,7 +295,7 @@ namespace WebAPIs.Controllers
                     }
 
                     result.Status = Status.Success;
-                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.StatusCode = HttpStatusCode.OK;
                     result.Body = resultModel;
                     return StatusCode((int)result.StatusCode, result);
                 }

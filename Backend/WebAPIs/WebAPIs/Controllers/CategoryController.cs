@@ -304,13 +304,13 @@ namespace WebAPIs.Controllers
         /// <param name="getAll">Check to select all categories.</param>
         /// <returns>
         /// Returns list of category.
-        /// </returns>
+        /// </returns>       
         [HttpGet("listing")]
         [ProducesResponseType(typeof(List<CategoryViewModel>), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        public async Task<ActionResult<IResult>> Listing(DataHelperModel dataHelper, bool getAllParent, bool getAll)
+        public async Task<ActionResult<IResult>>Listing([FromQuery] DataHelperModel dataHelper, bool getAllParent, bool getAll)
         {
             var result = new Result
             {
@@ -497,7 +497,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        public async Task<ActionResult<IResult>> GetAssociatedProducts(int id, DataHelperModel dataHelper)
+        public async Task<ActionResult<IResult>> GetAssociatedProducts( int id, [FromQuery] DataHelperModel dataHelper)
         {
             var result = new Result
             {
@@ -590,12 +590,10 @@ namespace WebAPIs.Controllers
                     result.Message = "Categories do not exist.";
                     return StatusCode((int)result.StatusCode, result);
                 }
-                ResultModel resultModel = new ResultModel();
-                resultModel.CategoryResult = categoryList;
 
                 result.Status = Status.Success;
-                result.Status = Status.Success;
-                result.Body = resultModel;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Body = categoryList;
                 return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)

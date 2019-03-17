@@ -110,7 +110,7 @@ namespace WebAPIs.Controllers
                 await context.SaveChangesAsync();
                 var createdUserId = await context.Login.Where(x => x.EmailID == file.EmailID).Select(x => x.UserID).FirstOrDefaultAsync();
                 var assignRole = AssignUserRole(createdUserId, false, userRoles);
-                if (assignRole)
+                if (assignRole == "userCreated")
                 {
                     result.Status = Status.Success;
                     result.StatusCode = HttpStatusCode.OK;
@@ -215,14 +215,14 @@ namespace WebAPIs.Controllers
                 var roleTypes = roleList.ToArray();
                 var createdUserId = await context.Login.Where(x => x.EmailID == file.EmailID).Select(x => x.UserID).FirstOrDefaultAsync();
                 var assignRole = AssignUserRole(createdUserId, true, roleTypes);
-                if (assignRole == true)
+                if (assignRole == "userCreated")
                 {
                     result.Status = Status.Success;
                     result.StatusCode = HttpStatusCode.OK;
                     result.Message = "success";
                     return StatusCode((int)result.StatusCode, result);
                 }
-                else if (assignRole == "Email not sent.")
+                else if (assignRole == "noEmail")
                 {
                     result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
@@ -265,7 +265,7 @@ namespace WebAPIs.Controllers
                     }
                     if (!fromAdmin)
                     {
-                        return true;
+                        return "userCreated";
                     }
                     else
                     {
@@ -281,17 +281,17 @@ namespace WebAPIs.Controllers
                         var result = SendMail(createdID);
                         if (result)
                         {
-                            return true;
+                            return "userCreated";
                         }
                         else
                         {
-                            return "Email not sent.";
+                            return "noEmail";
                         }
                     }
                 }
                 else
                 {
-                    return false;
+                    return "usetNotCreated";
                 }
             }
             catch (Exception e)
@@ -421,10 +421,10 @@ namespace WebAPIs.Controllers
         /// Update user details.
         /// </summary>
         /// <returns>
-        /// Status of user updated.
+        /// Detail of user updated.
         /// </returns>
         [HttpPut("update")]
-        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(UserViewModel), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -490,7 +490,20 @@ namespace WebAPIs.Controllers
                 user.Username = file.Username;
                 user.EmailID = file.EmailID;
                 await context.SaveChangesAsync();
-
+                var userDetail = from login in context.Login
+                                 where login.UserID == user.UserID
+                                 select new UserViewModel { UserID = login.UserID, Username = login.Username, EmailID = login.EmailID, FirstName = login.FirstName, ImageContent = login.ImageContent, LastName = login.LastName, RoleID = null };
+                if (userDetail.Count() == 0)
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "userEmpty";
+                    return StatusCode((int)result.StatusCode, result);
+                }
+                var userObj = await userDetail.FirstOrDefaultAsync();
+                var userRoles = await context.AssignedRolesTable.Where(x => x.UserID == user.UserID).Select(x => x.RoleID).ToArrayAsync();
+                userObj.RoleID = userRoles;
+                result.Body = userObj;
                 result.Status = Status.Success;
                 result.StatusCode = HttpStatusCode.OK;
                 return StatusCode((int)result.StatusCode, result);

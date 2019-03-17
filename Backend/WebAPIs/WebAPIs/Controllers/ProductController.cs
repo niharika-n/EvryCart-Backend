@@ -290,7 +290,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        public async Task<ActionResult<IResult>> Listing(DataHelperModel dataHelper)
+        public async Task<ActionResult<IResult>> Listing([FromQuery] DataHelperModel dataHelper)
         {
             var result = new Result
             {
@@ -609,7 +609,7 @@ namespace WebAPIs.Controllers
                 {
                     result.Status = Status.Fail;
                     result.StatusCode = HttpStatusCode.BadRequest;
-                    result.Message = "Product value exists already";
+                    result.Message = "isValue";
                     return StatusCode((int)result.StatusCode, result);
                 }
                 context.ProductAttributeValues.Add(attributeValue);
@@ -712,7 +712,7 @@ namespace WebAPIs.Controllers
         /// Details of selected product attribute. 
         /// </returns>
         [HttpGet("getdetailproductattributevalue/{id}")]
-        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(ProductAttributeValueViewModel), StatusCodes.Status206PartialContent)]
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
@@ -733,17 +733,20 @@ namespace WebAPIs.Controllers
                 }
                 if (id != 0)
                 {
-                    var attributeValue = await context.ProductAttributeValues.Where(x => x.ID == id).FirstOrDefaultAsync();
-                    if (attributeValue == null)
+                    var attributeValue = from attr in context.ProductAttributeValues
+                                         where attr.ID == id
+                                         select new ProductAttributeValueViewModel { ID = attr.ID, AttributeID = attr.AttributeID, ProductID = attr.ProductID, Value = attr.Value, AttributeName = attr.Attribute.AttributeName};
+                    var attrValueObj = await attributeValue.FirstOrDefaultAsync();
+                    if (attrValueObj == null)
                     {
                         result.Status = Status.Fail;
                         result.StatusCode = HttpStatusCode.BadRequest;
                         result.Message = "This attribute for product does not exist.";
                         return StatusCode((int)result.StatusCode, result); 
-                    }
-
-                    result.StatusCode = HttpStatusCode.OK;
+                    }                    
                     result.Status = Status.Success;
+                    result.Body = attrValueObj;
+                    result.StatusCode = HttpStatusCode.OK;
                     return StatusCode((int)result.StatusCode, result);
                 }                
                 result.Status = Status.Fail;
@@ -774,7 +777,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        public async Task<ActionResult<IResult>> GetListProductAttributeValue(int id, DataHelperModel dataHelper)
+        public async Task<ActionResult<IResult>> GetListProductAttributeValue(int id,[FromQuery] DataHelperModel dataHelper)
         {
             var result = new Result
             {
@@ -876,7 +879,7 @@ namespace WebAPIs.Controllers
                 await context.SaveChangesAsync();
 
                 result.Status = Status.Success;
-                result.StatusCode = HttpStatusCode.BadRequest;
+                result.StatusCode = HttpStatusCode.OK;
                 result.Message = "Attribute deleted";
                 return StatusCode((int)result.StatusCode, result);                
             }
