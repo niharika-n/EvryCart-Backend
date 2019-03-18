@@ -21,7 +21,7 @@ namespace WebAPIs.Data
             var userId = claimsIdentity.FindFirst(ClaimTypes.NameIdentifier).Value;
             var userName = claimsIdentity.FindFirst(ClaimTypes.Name).Value;
             var userEmail = claimsIdentity.FindFirst(ClaimTypes.Email).Value;
-            var roleID = claimsIdentity.FindFirst(ClaimTypes.Role).Value;
+            var roleID = claimsIdentity.FindFirst("Roles").Value;
             if (type == "ID")
             {
                 return Convert.ToInt32(userId);
@@ -32,7 +32,7 @@ namespace WebAPIs.Data
             }
             else if (type == "RoleID")
             {
-                return Convert.ToInt32(roleID);
+                return roleID;
             }
             else
             {

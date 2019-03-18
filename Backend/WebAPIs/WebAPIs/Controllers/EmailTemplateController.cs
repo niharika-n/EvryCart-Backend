@@ -12,10 +12,14 @@ using System.Security.Claims;
 using System.Security.Principal;
 using Microsoft.EntityFrameworkCore;
 using WebAPIs.Models;
+using System.Net;
 
 namespace WebAPIs.Controllers
 {
-    [Route("api/EmailTemplate/[action]")]
+    /// <summary>
+    /// Email controller.
+    /// </summary>
+    [Route("api/emailtemplate")]
     [ApiController]
     public class EmailTemplateController : ControllerBase
     {
@@ -29,42 +33,117 @@ namespace WebAPIs.Controllers
             helper = new Helper(_principal);
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpGet]
-        public async Task<ActionResult> GetTemplate(string templateType)
+
+        /// <summary>
+        /// Gets template.
+        /// </summary>
+        /// <param name="templateType">Template name for selected template.</param>
+        /// <returns>
+        /// Returns selected template.
+        /// </returns>
+        [HttpGet("gettemplate")]
+        [ProducesResponseType(typeof(ContentViewModel), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]        
+        public async Task<ActionResult<IResult>> GetTemplate(string templateType)
         {
-            var template = await context.ContentTable.Where(x => x.TemplateName == templateType).FirstOrDefaultAsync();
-            if (template != null)
+            var result = new Result
             {
-                return Ok(template);
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
+            try
+            {
+                var templateModel = from template in context.ContentTable
+                                    where template.TemplateName == templateType
+                                    select new ContentViewModel { ID = template.ID, TemplateName = template.TemplateName, Content = template.Content};
+                var templateObj = await templateModel.FirstOrDefaultAsync();
+
+                if (templateObj != null)
+                {
+                    result.Status = Status.Success;
+                    result.StatusCode = HttpStatusCode.OK;
+                    result.Body = templateObj;
+                    return StatusCode((int)result.StatusCode, result);
+                }
+                else
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "Email Template does not exist.";
+                    return StatusCode((int)result.StatusCode, result);
+                }
             }
-            else
+            catch (Exception e)
             {
-                return NotFound(new { message = "Email Template does not exist." });
+                result.Status = Status.Error;
+                result.Message = e.Message;
+                result.StatusCode = HttpStatusCode.InternalServerError;
+
+                return StatusCode((int)result.StatusCode, result);
             }
         }
 
-        [Authorize(Policy = "AdminOnly")]
-        [HttpPut]
-        public async Task<ActionResult> UpdateTemplate([FromBody] ContentModel contentModel)
+
+        /// <summary>
+        /// Updates template.
+        /// </summary>
+        /// <param name="contentModel">Template name of selected template.</param>
+        /// <returns>
+        /// Status of template updated.
+        /// </returns>
+        [HttpPut("updatetemplate")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "AdminOnly")]       
+        public async Task<ActionResult<IResult>> UpdateTemplate([FromBody] ContentModel contentModel)
         {
-            if (!ModelState.IsValid)
+            var result = new Result
             {
-                return BadRequest(ModelState);
-            }
-            var templateObj = await context.ContentTable.Where(x => x.TemplateName == contentModel.TemplateName).FirstOrDefaultAsync();
-            if (templateObj == null)
+                Operation = Operation.Update,
+                Status = Status.Success
+            };
+            try
             {
-                return NotFound(new { message = "Template does not exist." });
+                if (!ModelState.IsValid)
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    return StatusCode((int)result.StatusCode, result);
+                }
+                var templateObj = await context.ContentTable.Where(x => x.TemplateName == contentModel.TemplateName).FirstOrDefaultAsync();
+                if (templateObj == null)
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "Template does not exist.";
+                    return StatusCode((int)result.StatusCode, result);
+                }
+                var duplicateContentCheck = context.ContentTable.Where(x => x.TemplateName != contentModel.TemplateName && x.Content == contentModel.Content);
+                if (duplicateContentCheck.Count() != 0)
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "sameContentMessage";
+                    return StatusCode((int)result.StatusCode, result);
+                }
+                templateObj.Content = contentModel.Content;
+                await context.SaveChangesAsync();
+
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                return StatusCode((int)result.StatusCode, result);
             }
-            var duplicateContentCheck = context.ContentTable.Where(x => x.TemplateName != contentModel.TemplateName && x.Content == contentModel.Content);
-            if (duplicateContentCheck.Count() != 0)
+            catch (Exception e)
             {
-                return Ok(new { sameContentMessage = "This content already exists for another content template." });
+                result.Status = Status.Error;
+                result.Message = e.Message;
+                result.StatusCode = HttpStatusCode.InternalServerError;
+
+                return StatusCode((int)result.StatusCode, result);
             }
-            templateObj.Content = contentModel.Content;            
-            await context.SaveChangesAsync();            
-            return Ok(new { content =  templateObj});
         }
     }
 }

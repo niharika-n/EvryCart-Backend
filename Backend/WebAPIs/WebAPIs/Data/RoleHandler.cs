@@ -23,7 +23,7 @@ namespace WebAPIs.Data
             {
                 context.Succeed(requirement);
             }
-            if (userRoles.Contains((int)RoleTypes.SuperAdmin))
+            if (userRoles.Contains((int)Enums.SuperAdmin))
             {
                 context.Succeed(requirement);
             }
