@@ -370,7 +370,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        public async Task<IActionResult> Detail(int? id)
+        public async Task<ActionResult<IResult>> Detail(int? id)
         {
             var result = new Result
             {
