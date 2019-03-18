@@ -59,7 +59,7 @@ namespace WebAPIs.Controllers
                     var categoryViewModel = from category in context.Categories
                                             where category.CategoryID == id
                                             && category.IsDeleted != true
-                                            select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = "", AssociatedProducts = 0 };
+                                            select new CategoryViewModel { Name = category.CategoryName, CreatedBy = category.CreatedBy, ID = category.CategoryID, IsActive = category.IsActive, CreatedDate = category.CreatedDate, Description = category.CategoryDescription, ModifiedBy = category.ModifiedBy, ModifiedDate = category.ModifiedDate, CreatedUser = "", ModifiedUser = "", Parent = category.ParentCategory, Child = category.ChildCategory, ImageContent = null, AssociatedProducts = 0 };
                     var categoryObj = await categoryViewModel.FirstOrDefaultAsync();
 
                     var imageDetail = await context.Categories.Where(x => x.CategoryID == id && x.IsDeleted != true).Select(x => x.ImageID).FirstOrDefaultAsync();
