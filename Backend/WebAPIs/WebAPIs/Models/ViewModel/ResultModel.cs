@@ -17,6 +17,8 @@ namespace WebAPIs.Models
 
         public List<ProductAttributeValueViewModel> ProductAttributeValueResult { get; set; }
 
+        public List<UserViewModel> UserResult { get; set; }
+
         public int TotalCount { get; set; }
     }
 }

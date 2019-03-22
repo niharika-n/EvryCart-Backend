@@ -595,7 +595,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "SuperAdminOnly")]
-        public async Task<ActionResult<IResult>> GetUserList()
+        public async Task<ActionResult<IResult>> GetUserList([FromQuery] DataHelperModel dataHelper)
         {
             var result = new Result
             {
@@ -621,7 +621,11 @@ namespace WebAPIs.Controllers
                                   RoleID = userDetail.Key.assignedRoles.Where(x => x.UserID == userDetail.Key.user.UserID).Select(x => x.RoleID).ToArray(),
                                   ImageContent = null
                               };
-                var userList = userObj.Where(x => !x.RoleID.Contains(1)).Select(x => x).ToList();
+                if (dataHelper.Search != null)
+                {
+                    userObj = userObj.Where(x => x.Username.Contains(dataHelper.Search) || x.EmailID.Contains(dataHelper.Search));
+                }
+                var userList = userObj.Where(x => !x.RoleID.Contains(1)).Select(x => x);
                 if (userObj.Count() == 0)
                 {
                     result.Status = Status.Fail;
@@ -629,9 +633,18 @@ namespace WebAPIs.Controllers
                     result.Message = "noUserPresent";
                     return StatusCode((int)result.StatusCode, result);
                 }
+                var list = userList;
+                list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
+                var resultCount = list.Count();
+                var pagedList = DataCount.Page(list, dataHelper.PageNumber, dataHelper.PageSize);
+                var resultList = pagedList.ToList();
+                ResultModel resultModel = new ResultModel();
+                resultModel.UserResult = resultList;
+                resultModel.TotalCount = resultCount;
+
                 result.Status = Status.Success;
                 result.StatusCode = HttpStatusCode.OK;
-                result.Body = userList;
+                result.Body = resultModel;
                 return StatusCode((int)result.StatusCode, result);
             }
             catch (Exception e)
