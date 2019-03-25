@@ -532,7 +532,7 @@ namespace WebAPIs.Controllers
         [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize(Policy = "AdminOnly")]
-        public async Task<IActionResult> ChangePassword(string oldPassword, string newPassword)
+        public async Task<ActionResult<IResult>> ChangePassword(string oldPassword, string newPassword)
         {
             var result = new Result
             {
@@ -584,5 +584,77 @@ namespace WebAPIs.Controllers
             }
         }
 
+        /// <summary>
+        /// user list.
+        /// </summary>
+        /// <returns>
+        /// Returns list of user to superAdmin only.
+        /// </returns>
+        [HttpGet("getuserlist")]
+        [ProducesResponseType(typeof(List<UserViewModel>), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "SuperAdminOnly")]
+        public async Task<ActionResult<IResult>> GetUserList([FromQuery] DataHelperModel dataHelper)
+        {
+            var result = new Result
+            {
+                Operation = Operation.Read,
+                Status = Status.Success
+            };
+            try
+            {
+                var userObj = from user in context.Login
+                              join role in context.AssignedRolesTable
+                              on user.UserID equals role.UserID
+                              into assignedRoles
+                              from userRole in assignedRoles.DefaultIfEmpty()
+                              group new { user } by
+                              new { user, assignedRoles } into userDetail
+                              select new UserViewModel
+                              {
+                                  UserID = userDetail.Key.user.UserID,
+                                  EmailID = userDetail.Key.user.EmailID,
+                                  FirstName = userDetail.Key.user.FirstName,
+                                  LastName = userDetail.Key.user.LastName,
+                                  Username = userDetail.Key.user.Username,
+                                  RoleID = userDetail.Key.assignedRoles.Where(x => x.UserID == userDetail.Key.user.UserID).Select(x => x.RoleID).ToArray(),
+                                  ImageContent = null
+                              };
+                if (dataHelper.Search != null)
+                {
+                    userObj = userObj.Where(x => x.Username.Contains(dataHelper.Search) || x.EmailID.Contains(dataHelper.Search));
+                }
+                var userList = userObj.Where(x => !x.RoleID.Contains(1)).Select(x => x);
+                if (userObj.Count() == 0)
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "noUserPresent";
+                    return StatusCode((int)result.StatusCode, result);
+                }
+                var list = userList;
+                list = DataSort.SortBy(list, dataHelper.SortColumn, dataHelper.SortOrder);
+                var resultCount = list.Count();
+                var pagedList = DataCount.Page(list, dataHelper.PageNumber, dataHelper.PageSize);
+                var resultList = pagedList.ToList();
+                ResultModel resultModel = new ResultModel();
+                resultModel.UserResult = resultList;
+                resultModel.TotalCount = resultCount;
+
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Body = resultModel;
+                return StatusCode((int)result.StatusCode, result);
+            }
+            catch (Exception e)
+            {
+                result.Status = Status.Error;
+                result.Message = e.Message;
+                result.StatusCode = HttpStatusCode.InternalServerError;
+
+                return StatusCode((int)result.StatusCode, result);
+            }
+        }
     }
 }
