@@ -656,5 +656,75 @@ namespace WebAPIs.Controllers
                 return StatusCode((int)result.StatusCode, result);
             }
         }
+
+
+        /// <summary>
+        /// Assign user roles.
+        /// </summary>
+        /// <returns>
+        /// Status with success message.
+        /// </returns>
+        [HttpGet("changeuserrole")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status206PartialContent)]
+        [ProducesResponseType(typeof(IResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Authorize(Policy = "SuperAdminOnly")]
+        public async Task<ActionResult<IResult>> ChangeUserRole(int id, bool add, string selectedRoles)
+        {
+            var result = new Result()
+            {
+                Operation = Operation.Update,
+                Status = Status.Success
+            };
+            try
+            {
+                var userObj = from login in context.Login
+                              where login.UserID == id
+                              select new UserViewModel { UserID = login.UserID, Username = login.Username, EmailID = login.EmailID, FirstName = login.FirstName, ImageContent = login.ImageContent, LastName = login.LastName, RoleID = null };
+                var user = await userObj.FirstOrDefaultAsync();
+                var userRoles = await context.AssignedRolesTable.Where(x => x.UserID == user.UserID).Select(x => x.RoleID).ToArrayAsync();
+                user.RoleID = userRoles;
+                string[] tokens = selectedRoles.Split(',');
+                int[] newRoles = Array.ConvertAll(tokens, int.Parse);
+                if (newRoles.Count() == 0)
+                {
+                    result.Status = Status.Fail;
+                    result.StatusCode = HttpStatusCode.BadRequest;
+                    result.Message = "noRoleSelected";
+                    return StatusCode((int)result.StatusCode, result);
+                }
+
+                foreach (var role in newRoles)
+                {
+                    if (!userRoles.Contains(role) && add)
+                    {
+                        AssignedRolesModel assignedRoles = new AssignedRolesModel();
+                        assignedRoles.RoleID = role;
+                        assignedRoles.UserID = id;
+                        context.AssignedRolesTable.Add(assignedRoles);
+                        await context.SaveChangesAsync();
+                    }
+                    else if (userRoles.Contains(role) && !add)
+                    {
+                        var unrequiredRole = await context.AssignedRolesTable.Where(x => x.UserID == id && x.RoleID == role).FirstOrDefaultAsync();
+                        context.AssignedRolesTable.Remove(unrequiredRole);
+                        await context.SaveChangesAsync();
+                    }
+                }
+                result.Status = Status.Success;
+                result.StatusCode = HttpStatusCode.OK;
+                result.Message = "newRolesAlloted";
+                return StatusCode((int)result.StatusCode, result);
+            }
+            catch (Exception e)
+            {
+                result.Status = Status.Error;
+                result.Message = e.Message;
+                result.StatusCode = HttpStatusCode.InternalServerError;
+
+                return StatusCode((int)result.StatusCode, result);
+            }
+        }
+
     }
 }
